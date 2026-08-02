@@ -12,6 +12,7 @@ use topcoat::{
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
+mod api;
 mod layout;
 mod pages;
 mod ui;

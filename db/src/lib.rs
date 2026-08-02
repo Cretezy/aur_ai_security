@@ -3,7 +3,7 @@ use std::{path::Path, str::FromStr};
 use anyhow::{Context, Result};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
-    FromRow, SqlitePool,
+    FromRow, QueryBuilder, Sqlite, SqlitePool,
 };
 use tracing::debug;
 
@@ -61,6 +61,55 @@ pub struct PackageSearchResult {
     pub package_base: String,
     pub version: String,
     pub popularity: f64,
+}
+
+#[derive(Debug, FromRow)]
+pub struct CheckLookupResult {
+    pub package_base: String,
+    pub pkgbuild_commit: String,
+    pub version: String,
+    pub provider: String,
+    pub model: String,
+    pub verdict: String,
+    pub explanation: Option<String>,
+    pub checked_at: i64,
+}
+
+pub async fn lookup_checks(
+    pool: &SqlitePool,
+    packages: &[(&str, &str)],
+) -> Result<Vec<CheckLookupResult>, sqlx::Error> {
+    if packages.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut query = QueryBuilder::<Sqlite>::new(
+        r#"SELECT pv.package_base, c.pkgbuild_commit, pv.version,
+                  c.provider, c.model, c.verdict, c.explanation, c.checked_at
+           FROM checks c
+           JOIN package_versions pv ON pv.id = c.package_version_id
+           WHERE "#,
+    );
+    for (index, (package_base, commit)) in packages.iter().enumerate() {
+        if index > 0 {
+            query.push(" OR ");
+        }
+        query
+            .push("(pv.package_base = ")
+            .push_bind(*package_base)
+            .push(" AND c.pkgbuild_commit = ")
+            .push_bind(*commit)
+            .push(")");
+    }
+    query.push(" ORDER BY c.checked_at DESC, c.id DESC");
+
+    let checks = query.build_query_as().fetch_all(pool).await?;
+    debug!(
+        requested = packages.len(),
+        returned = checks.len(),
+        "looked up checks"
+    );
+    Ok(checks)
 }
 
 pub async fn recent_checks(
