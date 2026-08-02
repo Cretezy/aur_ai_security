@@ -25,6 +25,28 @@ A familiar or orphaned package can receive a malicious update through the same w
 
 Click the screenshot to open the [live demo](https://aur-security.cretezy.com/).
 
+## `paru` integration
+
+The experimental [`aur-ai-security` branch](https://github.com/Cretezy/paru/tree/aur-ai-security) checks the hosted API first, then locally assesses packages without a remote result using your configured provider and model. It runs after downloading AUR repositories and before executing pre-build commands or starting the build.
+
+These `paru.conf` options enable remote lookups with a local Codex fallback:
+
+```ini
+[options]
+AurSecurityRemote
+# AurSecurityRemoteUrl = https://aur-security.cretezy.com
+AurSecurityProvider = codex
+AurSecurityModel = gpt-5.6-luna
+# SkipSafeReviews
+# SkipAurSecurity
+```
+
+`AurSecurityRemoteUrl` is optional and defaults to the hosted service. Omit `AurSecurityRemote` to use local assessment only. `AurSecurityProvider` accepts `openai`, `anthropic`, `openrouter`, or `codex`; `AurSecurityModel` is the corresponding model identifier described in [AI providers](#ai-providers). API providers require their matching environment variable, while `codex` requires an installed and authenticated Codex CLI.
+
+Assessments are printed before the transaction table, whose verbose form includes a security-status column. Before review, `paru` asks whether safely assessed packages should be skipped; `SkipSafeReviews` makes skipping them the default answer. Suspicious, dangerous, unreviewed, and failed assessments remain in the normal review flow. With `--noconfirm`, a dangerous verdict aborts the transaction. `SkipAurSecurity` or `--skipaursecurity` disables the integration.
+
+![paru displaying remote and local AUR security assessments before an upgrade](docs/paru-example.png)
+
 ## Review philosophy
 
 Checks return one of three verdicts:

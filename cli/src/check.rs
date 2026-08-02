@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::Result;
 use aur_ai_security_checker::{check_package, Provider};
 use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool};
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 #[derive(Debug)]
 struct Candidate {
@@ -54,7 +54,14 @@ pub async fn run(
             "checking package"
         );
         if let Err(error) = check_one(pool, &package, provider, model).await {
-            eprintln!("Failed to check {}: {error:#}", package.package_name);
+            error!(
+                package = package.package_name,
+                version = package.version,
+                provider = provider.as_str(),
+                model,
+                error = ?error,
+                "failed to check package"
+            );
         }
     }
 
@@ -162,9 +169,14 @@ async fn check_one(
         "stored package assessment"
     );
 
-    match explanation {
-        Some(explanation) => println!("  {verdict} ({explanation})"),
-        None => println!("  {verdict}"),
-    }
+    info!(
+        package = package.package_name,
+        version = package.version,
+        provider = provider.as_str(),
+        model,
+        verdict,
+        ?explanation,
+        "completed package check"
+    );
     Ok(())
 }
