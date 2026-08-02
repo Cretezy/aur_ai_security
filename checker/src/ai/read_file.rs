@@ -61,7 +61,6 @@ impl Tool for ReadFile {
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        debug!(path = %args.path, "read_file tool requested a repository file");
         let requested = Path::new(&args.path);
         if requested.as_os_str().is_empty()
             || requested.is_absolute()

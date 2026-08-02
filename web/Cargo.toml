@@ -3,12 +3,14 @@ name = "aur_ai_security_web"
 version.workspace = true
 edition.workspace = true
 repository.workspace = true
+license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
 aur_ai_security_db = { path = "../db" }
 chrono.workspace = true
 clap.workspace = true
+pulldown-cmark.workspace = true
 sqlx.workspace = true
 serde.workspace = true
 tokio.workspace = true

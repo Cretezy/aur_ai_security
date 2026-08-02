@@ -104,15 +104,28 @@ fn init_logging() {
 
 fn logging_filter() -> EnvFilter {
     let configured = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_owned());
-    let includes_sqlx = configured.split(',').any(|directive| {
-        directive
-            .split_once('=')
-            .is_some_and(|(target, _)| target.trim().starts_with("sqlx"))
-    });
-    let filter = EnvFilter::new(configured);
-    if includes_sqlx {
-        filter
-    } else {
-        filter.add_directive("sqlx=info".parse().expect("valid SQLx log directive"))
+    let includes_target = |target: &str| {
+        configured.split(',').any(|directive| {
+            directive
+                .split_once('=')
+                .is_some_and(|(configured_target, _)| {
+                    let configured_target = configured_target.trim();
+                    configured_target == target
+                        || configured_target
+                            .strip_prefix(target)
+                            .is_some_and(|suffix| suffix.starts_with("::"))
+                })
+        })
+    };
+    let mut filter = EnvFilter::new(configured.clone());
+    for (target, level) in [("sqlx", "info"), ("rig", "warn"), ("rig_core", "warn")] {
+        if !includes_target(target) {
+            filter = filter.add_directive(
+                format!("{target}={level}")
+                    .parse()
+                    .expect("valid dependency log directive"),
+            );
+        }
     }
+    filter
 }

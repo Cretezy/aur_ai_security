@@ -1,8 +1,9 @@
 use aur_ai_security_db as db;
+use pulldown_cmark::{html, CowStr, Event, Options, Parser, Tag};
 use topcoat::{
     context::Cx,
     router::{error::not_found, page, path_param, query_params},
-    view::view,
+    view::{view, Unescaped},
     Result,
 };
 use tracing::debug;
@@ -29,6 +30,59 @@ struct Repo(str);
 
 #[path_param]
 struct Commit(str);
+
+fn markdown_explanation(markdown: &str) -> Unescaped<String> {
+    let options =
+        Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TABLES | Options::ENABLE_TASKLISTS;
+    let events = Parser::new_ext(markdown, options).map(|event| match event {
+        // Explanations can contain package-controlled text, so raw HTML must
+        // remain visible as text rather than becoming executable markup.
+        Event::Html(html) | Event::InlineHtml(html) => Event::Text(html),
+        Event::Start(Tag::Link {
+            link_type,
+            dest_url,
+            title,
+            id,
+        }) => Event::Start(Tag::Link {
+            link_type,
+            dest_url: safe_markdown_url(dest_url),
+            title,
+            id,
+        }),
+        Event::Start(Tag::Image {
+            link_type,
+            dest_url,
+            title,
+            id,
+        }) => Event::Start(Tag::Image {
+            link_type,
+            dest_url: safe_markdown_url(dest_url),
+            title,
+            id,
+        }),
+        event => event,
+    });
+
+    let mut rendered = String::new();
+    html::push_html(&mut rendered, events);
+    Unescaped::new_unchecked(rendered)
+}
+
+fn safe_markdown_url(url: CowStr<'_>) -> CowStr<'_> {
+    let normalized = url.trim().to_ascii_lowercase();
+    let is_safe = normalized.starts_with("http://")
+        || normalized.starts_with("https://")
+        || normalized.starts_with("mailto:")
+        || normalized.starts_with('/')
+        || normalized.starts_with('#')
+        || !normalized.contains(':');
+
+    if is_safe {
+        url
+    } else {
+        CowStr::Borrowed("#")
+    }
+}
 
 #[page("/checks")]
 async fn checks_page(cx: &Cx) -> Result {
@@ -209,7 +263,11 @@ async fn check_detail_page(cx: &Cx) -> Result {
             <span class=(verdict_class)>(check.verdict.as_str())</span>
         </p>
         if let Some(explanation) = &check.explanation {
-            <p class="mt-4 max-w-3xl text-lg leading-8 text-slate-300">(explanation)</p>
+            <div
+                class="mt-4 max-w-3xl text-lg leading-8 text-slate-300 [&_a]:text-sky-300 [&_a]:underline [&_a]:underline-offset-2 hover:[&_a]:text-sky-200 [&_blockquote]:border-l-4 [&_blockquote]:border-slate-600 [&_blockquote]:pl-4 [&_code]:rounded [&_code]:bg-slate-800 [&_code]:px-1.5 [&_code]:py-0.5 [&_h1]:mt-5 [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:mt-5 [&_h2]:text-xl [&_h2]:font-bold [&_h3]:mt-4 [&_h3]:font-bold [&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-7 [&_p]:my-3 [&_pre]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-slate-900 [&_pre]:p-4 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_strong]:text-slate-100 [&_table]:my-4 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-slate-700 [&_td]:p-2 [&_th]:border [&_th]:border-slate-700 [&_th]:p-2 [&_th]:text-left [&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-7"
+            >
+                (markdown_explanation(explanation))
+            </div>
         }
         <div class="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div class="rounded-xl border border-slate-800 bg-slate-900 p-4">
@@ -292,5 +350,33 @@ async fn check_detail_page(cx: &Cx) -> Result {
                 <code class="language-diff">(check.commit_diff.as_str())</code>
             </pre>
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::markdown_explanation;
+
+    fn render_markdown(markdown: &str) -> String {
+        markdown_explanation(markdown).to_string()
+    }
+
+    #[test]
+    fn renders_explanation_markdown() {
+        let rendered = render_markdown("**Dangerous** because:\n\n- runs `curl`\n- changes files");
+
+        assert!(rendered.contains("<strong>Dangerous</strong>"));
+        assert!(rendered.contains("<ul>"));
+        assert!(rendered.contains("<code>curl</code>"));
+    }
+
+    #[test]
+    fn does_not_render_untrusted_html_or_urls() {
+        let rendered = render_markdown("<script>alert(1)</script>\n\n[click](javascript:alert(1))");
+
+        assert!(!rendered.contains("<script>"));
+        assert!(rendered.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
+        assert!(rendered.contains("href=\"#\""), "{rendered}");
+        assert!(!rendered.contains("javascript:"));
     }
 }

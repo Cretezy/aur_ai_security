@@ -30,7 +30,7 @@ async fn main() -> Result<()> {
     init_logging();
     let args = Args::parse();
     info!(database = %args.database.display(), "starting AUR AI security web server");
-    let pool = db::connect(&args.database, false).await?;
+    let pool = db::connect(&args.database, true).await?;
 
     let assets = AssetBundle::load().context("failed to load Topcoat assets")?;
     topcoat::start(

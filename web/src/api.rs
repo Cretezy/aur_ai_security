@@ -10,7 +10,7 @@ use topcoat::{
 
 use crate::database;
 
-const MAX_LOOKUPS: usize = 100;
+const MAX_LOOKUPS: usize = 1_000;
 
 #[derive(Debug, Deserialize)]
 struct LookupRequest {
@@ -323,7 +323,7 @@ mod tests {
             json!({ "packages": [{ "package_base": "Bad Name", "commit": valid_commit }] }),
             json!({ "packages": [{ "package_base": "paru", "commit": "not-a-commit" }] }),
             json!({
-                "packages": (0..101)
+                "packages": (0..1_001)
                     .map(|_| json!({ "package_base": "paru", "commit": valid_commit }))
                     .collect::<Vec<_>>()
             }),

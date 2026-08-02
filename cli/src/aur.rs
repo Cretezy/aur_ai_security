@@ -35,7 +35,6 @@ struct PackageMetadata {
 
 pub async fn update_index(pool: &SqlitePool) -> Result<()> {
     info!(url = INDEX_URL, "downloading AUR package index");
-    println!("Downloading {INDEX_URL}");
     let compressed = reqwest::get(INDEX_URL)
         .await?
         .error_for_status()?
@@ -91,6 +90,5 @@ pub async fn update_index(pool: &SqlitePool) -> Result<()> {
 
     transaction.commit().await?;
     info!(packages = packages.len(), "updated package version index");
-    println!("Recorded {} current package versions", packages.len());
     Ok(())
 }

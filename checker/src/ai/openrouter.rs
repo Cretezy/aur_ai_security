@@ -8,7 +8,8 @@ use rig_core::{
 
 use super::read_file::ReadFile;
 use super::{
-    package_prompt, parse_assessment, AiProvider, Assessment, ProviderFuture, REVIEW_PROMPT,
+    package_prompt, parse_assessment, AiProvider, Assessment, LoggingHook, ProviderFuture,
+    REVIEW_PROMPT,
 };
 
 pub(super) struct OpenRouter;
@@ -31,6 +32,7 @@ impl AiProvider for OpenRouter {
                 .output_schema::<Assessment>()
                 .output_mode(OutputMode::Native)
                 .tool(ReadFile::new(repository_path)?)
+                .add_hook(LoggingHook)
                 .build();
             let response = agent
                 .prompt(package_prompt(package_name, pkgbuild, commit_diff))

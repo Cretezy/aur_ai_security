@@ -53,7 +53,6 @@ pub async fn run(
             model,
             "checking package"
         );
-        println!("Checking {} {}", package.package_name, package.version);
         if let Err(error) = check_one(pool, &package, provider, model).await {
             eprintln!("Failed to check {}: {error:#}", package.package_name);
         }

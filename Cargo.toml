@@ -6,6 +6,7 @@ resolver = "2"
 version = "0.1.0"
 edition = "2021"
 repository = "https://github.com/Cretezy/aur_ai_security"
+license = "GPL-3.0-only"
 
 [workspace.dependencies]
 anyhow = "1"
@@ -14,6 +15,7 @@ clap = { version = "4", features = ["derive", "env"] }
 flate2 = "1"
 git2 = "0.20"
 humantime = "2"
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
 reqwest = "0.12"
 rig-core = "0.40"
 schemars = "1"

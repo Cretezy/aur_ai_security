@@ -1,7 +1,11 @@
 use std::{future::Future, path::Path, pin::Pin};
 
 use anyhow::{bail, Context, Result};
-use rig_core::schemars::JsonSchema;
+use rig_core::{
+    agent::{AgentHook, Flow, HookContext, StepEvent},
+    completion::CompletionModel,
+    schemars::JsonSchema,
+};
 use serde::Deserialize;
 use tracing::debug;
 
@@ -18,13 +22,41 @@ Use Safe for ordinary packaging behavior. Use Suspicious when behavior needs hum
 
 Pay particular attention to unexpected downloads, changed domains or repository owners, obfuscated shell, credential or private-data access, persistence, privilege escalation, and code execution hidden in packaging steps. Normal dependencies and standard build/install commands are not suspicious by themselves.
 
-Do not flag an update that only changes version numbers and their corresponding checksums when the package still uses the same established upstream provenance. New releases from the same project owner, repository, domain, and release mechanism are generally routine and safe.
+Focus the review on what the update adds or changes, using unchanged content only as context.
+Comment-only changes, including maintainer updates, are routine and safe.
+Do not flag pre-existing behavior unchanged by the update.
 
-A provenance change is not routine. Pay closer attention when an update changes the upstream domain, repository owner or name, download host, source path pattern, signing identity, or delivery mechanism. Explain the concrete change and risk when one of these changes warrants human review; do not infer maliciousness from a version bump or checksum change alone.
+If there is no meaningful prior diff, review the full PKGBUILD for concrete malicious behavior.
+
+Version and checksum updates, as well as release archive changes such as ZIP to TAR.GZ and corresponding extraction changes, are routine and safe when they retain the same established upstream owner, repository, domain, and release location. Flag them only when there is separate concrete evidence of risk.
+
+A provenance change crosses a trust boundary, such as changing the upstream owner, repository, domain, download host, or signing identity. A path or archive-format change within the same trusted release source is not a provenance change.
+
+Do not use Suspicious merely because a legitimate change cannot be independently confirmed; require a concrete risk introduced by the update.
 
 Executing an upstream program during packaging is not inherently suspicious. Treat common packaging tasks such as invoking a checksum-verified upstream binary to generate shell completions, manuals, metadata, or caches as ordinary behavior when the artifact comes from the package's established upstream source and the invocation matches its documented purpose. Likewise, an unused auxiliary checksum file is not a security concern when makepkg already verifies the actual source artifact. Flag execution only when its provenance, purpose, arguments, side effects, or placement are unexpected or insufficiently verified."#;
 
 pub(super) type ProviderFuture<'a> = Pin<Box<dyn Future<Output = Result<Assessment>> + Send + 'a>>;
+
+#[derive(Clone, Copy)]
+pub(super) struct LoggingHook;
+
+impl<M: CompletionModel> AgentHook<M> for LoggingHook {
+    async fn on_event(&self, _ctx: &HookContext, event: StepEvent<'_, M>) -> Flow {
+        match event {
+            StepEvent::CompletionCall { turn, .. } => {
+                debug!(turn, "starting model turn");
+            }
+            StepEvent::ToolCall {
+                tool_name, args, ..
+            } => {
+                tracing::info!(tool_name, args, "calling agent tool");
+            }
+            _ => {}
+        }
+        Flow::cont()
+    }
+}
 
 pub trait AiProvider: Send + Sync {
     fn assess<'a>(
@@ -202,5 +234,26 @@ mod tests {
         assert!(
             parse_codex_assessment(r#"{"classification":"dangerous","explanation":""}"#).is_err()
         );
+    }
+
+    #[test]
+    fn review_prompt_treats_same_upstream_archive_changes_as_safe() {
+        assert!(REVIEW_PROMPT.contains(
+            "release archive changes such as ZIP to TAR.GZ and corresponding extraction changes"
+        ));
+        assert!(REVIEW_PROMPT
+            .contains("are routine and safe when they retain the same established upstream"));
+        assert!(REVIEW_PROMPT.contains(
+            "A path or archive-format change within the same trusted release source is not a provenance change"
+        ));
+    }
+
+    #[test]
+    fn review_prompt_requires_concrete_risk_and_handles_missing_diffs() {
+        assert!(REVIEW_PROMPT.contains(
+            "Do not use Suspicious merely because a legitimate change cannot be independently confirmed"
+        ));
+        assert!(REVIEW_PROMPT
+            .contains("If there is no meaningful prior diff, review the full PKGBUILD"));
     }
 }

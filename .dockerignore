@@ -1,0 +1,12 @@
+.git
+.agents
+.codex
+target
+*.db
+*.sqlite
+*.sqlite3
+.env
+.env.*
+Dockerfile*
+README.md
+docs
