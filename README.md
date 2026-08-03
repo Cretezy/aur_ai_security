@@ -1,6 +1,6 @@
-# AUR AI Security
+# AUR Security
 
-[AUR AI Security](https://github.com/Cretezy/aur_ai_security) is an AI-assisted review pipeline for the [Arch User Repository](https://aur.archlinux.org/). It indexes package versions, examines AUR Git repositories for malware and supply-chain risk, and presents the evidence in a searchable web interface.
+[AUR Security](https://github.com/Cretezy/aur-security) is an AI-assisted review pipeline for the [Arch User Repository](https://aur.archlinux.org/). It indexes package versions, examines AUR Git repositories for malware and supply-chain risk, and presents the evidence in a searchable web interface.
 
 [Read the article](https://cretezy.com/2026/aur-ai-security/) · [Try the live demo](https://aur-security.cretezy.com/)
 
@@ -21,7 +21,7 @@ A familiar or orphaned package can receive a malicious update through the same w
 
 ## Demo
 
-[![AUR AI Security showing a suspicious package assessment and highlighted commit diff](docs/aur-ai-security-demo.png)](https://aur-security.cretezy.com/)
+[![AUR Security showing a suspicious package assessment and highlighted commit diff](docs/aur-ai-security-demo.png)](https://aur-security.cretezy.com/)
 
 Click the screenshot to open the [live demo](https://aur-security.cretezy.com/).
 
@@ -133,6 +133,8 @@ Supported providers are `openai`, `anthropic`, `openrouter`, `claude`, and `code
 
 `--since` uses the package's AUR `LastModified` timestamp and composes with `--filter` and `--dry-run`. Timestamps without an explicit timezone are interpreted as UTC.
 
+Checks run concurrently across the available CPU cores by default. Use `--parallelism N` (or its `--jobs N` alias) to override the number of concurrent checks, or set `AUR_SECURITY_CHECK_PARALLELISM`.
+
 ## AI providers
 
 | Provider | Authentication | Model argument |
@@ -167,7 +169,7 @@ cargo install topcoat-cli
 topcoat dev --package aur_ai_security_web
 ```
 
-It listens on `http://127.0.0.1:3000` by default. Use `HOST`, `PORT`, and `AUR_AI_SECURITY_DATABASE` to customize the server. The interface provides package search, verdict filters, check history, complete PKGBUILDs, and highlighted diffs.
+It listens on `http://127.0.0.1:3000` by default. Use `HOST`, `PORT`, and `AUR_SECURITY_DATABASE` to customize the server. The interface provides package search, verdict filters, check history, complete PKGBUILDs, and highlighted diffs.
 
 The JSON API includes `POST /api/v1/checks/lookup` for batch assessment lookup by package base and ordered commit list.
 
@@ -179,12 +181,17 @@ topcoat asset bundle --release --package aur_ai_security_web
 ./target/release/aur_ai_security_web --database sqlite.db
 ```
 
+### Cloudflare Workers and D1
+
+The `web` crate also builds the Worker target and serves the same UI from Cloudflare Workers with D1 storage. Follow [web/README.md](web/README.md) to apply migrations, configure the API secret, and deploy. The CLI connects through authenticated discrete API operations with `AUR_SECURITY_REMOTE_URL` and `AUR_SECURITY_API_TOKEN`; it never connects to D1 directly.
+
 ## Workspace
 
 - `checker` (`aur_ai_security_checker`): repository cloning, evidence collection, and AI assessment
 - `db` (`aur_ai_security_db`): SQLite connection, migrations, and queries
 - `cli` (`aur_ai_security`): indexing, candidate selection, and result persistence
-- `web` (`aur_ai_security_web`): package search and assessment browsing
+- `web` (`aur_ai_security_web`): native package browsing server and Cloudflare Worker/D1 target
+- `protocol` (`aur_ai_security_protocol`): shared wire types for local and remote database operations
 
 The CLI and web application share the database crate; the checker is independent of clap, SQLx, and the index database.
 

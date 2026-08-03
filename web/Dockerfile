@@ -2,7 +2,7 @@ FROM rust:1.95-bookworm AS builder
 
 WORKDIR /app
 
-RUN cargo install topcoat-cli --version 0.5.0 --locked
+RUN cargo install topcoat-cli --locked
 
 COPY Cargo.toml Cargo.lock ./
 COPY checker ./checker
@@ -30,7 +30,7 @@ COPY --from=builder --chown=app:app /app/dist/assets ./assets
 
 ENV HOST=0.0.0.0 \
     PORT=3000 \
-    AUR_AI_SECURITY_DATABASE=/data/sqlite.db
+    AUR_SECURITY_DATABASE=/data/sqlite.db
 
 VOLUME ["/data"]
 EXPOSE 3000

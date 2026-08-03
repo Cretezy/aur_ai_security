@@ -1,61 +1,21 @@
 use std::collections::HashMap;
 
 use aur_ai_security_db as db;
-use serde::{Deserialize, Serialize};
+use aur_ai_security_protocol as protocol;
+use topcoat::router::content::Json;
 use topcoat::{
     context::Cx,
-    router::{content::Json, error::bad_request, route},
+    router::{error::bad_request, route},
     Result,
 };
 
 use crate::database;
 
-const MAX_LOOKUPS: usize = 1_000;
-
-#[derive(Debug, Deserialize)]
-struct LookupRequest {
-    packages: Vec<LookupPackage>,
-}
-
-#[derive(Debug, Deserialize)]
-struct LookupPackage {
-    package_base: String,
-    commits: Vec<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct LookupResponse {
-    results: Vec<LookupResult>,
-}
-
-#[derive(Debug, Serialize)]
-struct LookupResult {
-    package_base: String,
-    commits: Vec<LookupCommitResult>,
-}
-
-#[derive(Debug, Serialize)]
-struct LookupCommitResult {
-    commit: String,
-    assessment: Option<Assessment>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-struct Assessment {
-    verdict: String,
-    explanation: Option<String>,
-    provider: String,
-    model: String,
-    checked_at: i64,
-    version: String,
-    details_path: String,
-}
-
 #[route(POST "/api/v1/checks/lookup")]
 async fn lookup_checks(
     cx: &Cx,
-    Json(request): Json<LookupRequest>,
-) -> Result<Json<LookupResponse>> {
+    Json(request): Json<protocol::LookupRequest>,
+) -> Result<Json<protocol::LookupResponse>> {
     validate_request(&request)?;
 
     let normalized = request
@@ -72,7 +32,14 @@ async fn lookup_checks(
         .iter()
         .map(|(package_base, commit)| (*package_base, commit.as_str()))
         .collect::<Vec<_>>();
-    let matches = db::lookup_checks(database(cx), &requested).await?;
+    let keys = requested
+        .into_iter()
+        .map(|(package_base, commit)| db::LookupKey {
+            package_base: package_base.to_owned(),
+            commit: commit.to_owned(),
+        })
+        .collect::<Vec<_>>();
+    let matches = database(cx).lookup_checks(&keys).await?;
 
     // The database orders newest-first, so the first row encountered for a pair wins.
     let mut assessments = HashMap::with_capacity(matches.len());
@@ -82,7 +49,7 @@ async fn lookup_checks(
                 check.package_base.clone(),
                 check.pkgbuild_commit.to_ascii_lowercase(),
             ))
-            .or_insert_with(|| Assessment {
+            .or_insert_with(|| protocol::Assessment {
                 verdict: check.verdict,
                 explanation: check.explanation,
                 provider: check.provider,
@@ -102,23 +69,23 @@ async fn lookup_checks(
                 .into_iter()
                 .map(|commit| {
                     let key = (package.package_base.clone(), commit.to_ascii_lowercase());
-                    LookupCommitResult {
+                    protocol::LookupCommitResult {
                         commit,
                         assessment: assessments.get(&key).cloned(),
                     }
                 })
                 .collect();
-            LookupResult {
+            protocol::LookupResult {
                 package_base: package.package_base,
                 commits,
             }
         })
         .collect();
 
-    Ok(Json(LookupResponse { results }))
+    Ok(Json(protocol::LookupResponse { results }))
 }
 
-fn validate_request(request: &LookupRequest) -> Result<()> {
+fn validate_request(request: &protocol::LookupRequest) -> Result<()> {
     let mut total_commits = 0usize;
 
     for (index, package) in request.packages.iter().enumerate() {
@@ -135,9 +102,10 @@ fn validate_request(request: &LookupRequest) -> Result<()> {
             .into());
         }
         total_commits = total_commits.saturating_add(package.commits.len());
-        if total_commits > MAX_LOOKUPS {
+        if total_commits > protocol::MAX_LOOKUPS {
             return Err(bad_request(format!(
-                "packages must contain at most {MAX_LOOKUPS} commits"
+                "packages must contain at most {} commits",
+                protocol::MAX_LOOKUPS
             ))
             .into());
         }
@@ -191,7 +159,7 @@ mod tests {
     fn router(pool: SqlitePool) -> Router {
         Router::builder()
             .route(lookup_checks)
-            .app_context(pool)
+            .app_context(db::SqliteBackend::new(pool))
             .build()
     }
 

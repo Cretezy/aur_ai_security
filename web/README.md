@@ -1,4 +1,4 @@
-# AUR AI Security web app
+# AUR Security web app
 
 The web app serves the package and security-check data stored by the CLI in a
 SQLite database. Its Docker image contains the release web binary and the
@@ -10,7 +10,7 @@ Run the build from the repository root so Docker can access all workspace
 crates:
 
 ```bash
-docker build -f web/Dockerfile -t aur-ai-security-web:latest .
+docker build -f web/Dockerfile -t aur-security-web:latest .
 ```
 
 ## Run the container
@@ -35,19 +35,19 @@ access to the directory:
 
 ```bash
 docker run --detach \
-  --name aur-ai-security-web \
+  --name aur-security-web \
   --restart unless-stopped \
   --user "$(id -u):$(id -g)" \
   --publish 3000:3000 \
   --volume "$PWD/docker-data:/data" \
-  aur-ai-security-web:latest
+  aur-security-web:latest
 ```
 
 Open <http://127.0.0.1:3000>.
 
 The container listens on port `3000` and reads
 `/data/sqlite.db` by default. Override those defaults with the `PORT` and
-`AUR_AI_SECURITY_DATABASE` environment variables if needed.
+`AUR_SECURITY_DATABASE` environment variable if needed.
 
 ## Lookup API
 
@@ -190,3 +190,58 @@ Validation errors include:
 - A missing or non-JSON `Content-Type`, malformed JSON, or a JSON body that does not match the request shape
 
 Unexpected server or database failures return a 5xx response.
+
+## Cloudflare Workers and D1
+
+The same web crate also builds the Cloudflare Worker and serves the UI from D1.
+The local CLI uses the authenticated HTTP API rather than connecting to D1
+directly.
+
+With Wrangler installed separately, apply the checked-in migrations and deploy:
+
+```bash
+wrangler d1 migrations apply aur-security --remote
+wrangler secret put AUR_SECURITY_API_TOKEN
+wrangler deploy
+```
+
+To create one token for both the Worker and the local CLI, run this from the
+repository root. The generated `.env` file is ignored by Git:
+
+```bash
+umask 077
+token_file="$(mktemp)"
+openssl rand -hex 32 >"$token_file"
+{
+    printf '%s\n' 'AUR_SECURITY_REMOTE_URL=https://aur-security.cretezy.workers.dev'
+    printf 'AUR_SECURITY_API_TOKEN='
+    cat "$token_file"
+    printf '\n'
+} > .env
+bunx wrangler secret put AUR_SECURITY_API_TOKEN <"$token_file"
+rm -f "$token_file"
+```
+
+For local development:
+
+```bash
+wrangler d1 migrations apply aur-security --local
+wrangler dev
+```
+
+The configured D1 binding is `aur_security`. Run the CLI against the deployed
+Worker with:
+
+```bash
+set -a
+source .env
+set +a
+
+cargo run -p aur_ai_security -- update-index
+cargo run -p aur_ai_security -- check --provider openai --model gpt-5.6-luna
+```
+
+`web/build.sh` installs the released Topcoat and Workers build tools used by the
+[reference POC](https://github.com/Sillyvan/topcoat-workers-poc/blob/main/build.sh).
+The CLI loads `.env` automatically when run from the repository, so the
+generated remote settings can be used directly with `cargo run`.

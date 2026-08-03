@@ -1,0 +1,34 @@
+{
+	"$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
+	"name": "aur-security",
+	"main": "web/build/index.js",
+	"compatibility_date": "2026-08-02",
+	"assets": {
+		"directory": "./web/static"
+	},
+	"observability": {
+		"enabled": true,
+		"head_sampling_rate": 1,
+		"logs": {
+			"enabled": true,
+			"invocation_logs": true,
+			"head_sampling_rate": 1
+		},
+		"traces": {
+			"enabled": true,
+			"head_sampling_rate": 1
+		}
+	},
+	"d1_databases": [
+		{
+			"binding": "aur_security",
+			"database_name": "aur-security",
+			"database_id": "927416eb-7f7a-4ca4-9e7b-d57b24ce8ba3",
+			"migrations_dir": "db/migrations"
+		}
+	],
+	"build": {
+		"command": "bash ./web/build.sh",
+		"watch_dir": "./web/src"
+	}
+}

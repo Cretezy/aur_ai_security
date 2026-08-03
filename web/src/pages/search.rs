@@ -1,4 +1,3 @@
-use aur_ai_security_db as db;
 use topcoat::{
     context::Cx,
     router::{page, query_params},
@@ -20,7 +19,7 @@ async fn search_page(cx: &Cx) -> Result {
     let packages = if term.is_empty() {
         Vec::new()
     } else {
-        db::search_packages(database(cx), term).await?
+        database(cx).search_packages(term).await?
     };
 
     view! {

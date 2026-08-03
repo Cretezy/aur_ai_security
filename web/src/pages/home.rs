@@ -83,7 +83,7 @@ async fn home() -> Result {
             </div>
             <a
                 class="w-fit rounded-lg border border-slate-700 px-5 py-3 font-bold text-white hover:border-slate-500 hover:bg-slate-900"
-                href="https://github.com/Cretezy/aur_ai_security#paru-integration"
+                href="https://github.com/Cretezy/aur-security#paru-integration"
             >
                 "Read the setup on GitHub ↗"
             </a>
@@ -108,7 +108,7 @@ async fn home() -> Result {
                 </a>
                 <a
                     class="rounded-lg border border-slate-700 px-5 py-3 font-bold text-white hover:border-slate-500 hover:bg-slate-900"
-                    href="https://github.com/Cretezy/aur_ai_security"
+                    href="https://github.com/Cretezy/aur-security"
                 >
                     "View on GitHub ↗"
                 </a>

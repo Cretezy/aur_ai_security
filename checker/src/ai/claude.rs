@@ -75,6 +75,7 @@ fn command(model: &str, prompt: &str, repository_path: &std::path::Path) -> Resu
         .args(["--tools", "Read,Glob,Grep"])
         .args(["--output-format", "json"])
         .args(["--max-turns", "4"])
+        .args(["--effort", "low"])
         .args(["--model", model])
         .args(["--system-prompt", REVIEW_PROMPT])
         .args(["--json-schema", &schema])
@@ -154,6 +155,9 @@ mod tests {
         assert!(args
             .windows(2)
             .any(|args| args == [OsStr::new("--tools"), OsStr::new("Read,Glob,Grep")]));
+        assert!(args
+            .windows(2)
+            .any(|args| args == [OsStr::new("--effort"), OsStr::new("low")]));
         assert!(!args.iter().any(|arg| {
             ["Bash", "Edit", "Write", "WebFetch", "WebSearch"]
                 .iter()

@@ -7,5 +7,12 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-sqlx.workspace = true
+async-trait.workspace = true
+aur_ai_security_protocol = { path = "../protocol" }
+sqlx = { workspace = true, optional = true }
+serde.workspace = true
 tracing.workspace = true
+
+[features]
+default = ["sqlite"]
+sqlite = ["dep:sqlx"]

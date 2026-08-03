@@ -4,9 +4,10 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use aur_ai_security_db::Database;
+use aur_ai_security_protocol as protocol;
 use flate2::read::GzDecoder;
 use serde::Deserialize;
-use sqlx::SqlitePool;
 use tracing::{debug, info};
 
 const INDEX_URL: &str = "https://aur.archlinux.org/packages-meta-v1.json.gz";
@@ -33,7 +34,19 @@ struct PackageMetadata {
     url_path: String,
 }
 
-pub async fn update_index(pool: &SqlitePool) -> Result<()> {
+pub async fn update_index<B: Database>(database: &B) -> Result<()> {
+    let packages = download_index().await?;
+    let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
+    database.begin_index(now).await?;
+    for chunk in packages.chunks(protocol::MAX_INDEX_BATCH) {
+        database.upsert_index_batch(now, chunk).await?;
+    }
+    database.finish_index(now).await?;
+    info!(packages = packages.len(), "updated package version index");
+    Ok(())
+}
+
+async fn download_index() -> Result<Vec<protocol::PackageVersion>> {
     info!(url = INDEX_URL, "downloading AUR package index");
     let compressed = reqwest::get(INDEX_URL)
         .await?
@@ -48,47 +61,18 @@ pub async fn update_index(pool: &SqlitePool) -> Result<()> {
         serde_json::from_reader(GzDecoder::new(Cursor::new(compressed)))
             .context("failed to decode the AUR package index")?;
     debug!(packages = packages.len(), "decoded AUR package index");
-    let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
-    let mut transaction = pool.begin().await?;
-
-    sqlx::query("UPDATE package_versions SET is_current = 0")
-        .execute(&mut *transaction)
-        .await?;
-
-    for package in &packages {
-        sqlx::query(
-            r#"INSERT INTO package_versions (
-                    package_name, version, package_base, aur_package_id,
-                    aur_package_base_id, submitter, last_modified, popularity,
-                    url_path, is_current, first_seen_at, last_seen_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-                ON CONFLICT(package_name, version) DO UPDATE SET
-                    package_base = excluded.package_base,
-                    aur_package_id = excluded.aur_package_id,
-                    aur_package_base_id = excluded.aur_package_base_id,
-                    submitter = excluded.submitter,
-                    last_modified = excluded.last_modified,
-                    popularity = excluded.popularity,
-                    url_path = excluded.url_path,
-                    is_current = 1,
-                    last_seen_at = excluded.last_seen_at"#,
-        )
-        .bind(&package.package_name)
-        .bind(&package.version)
-        .bind(&package.package_base)
-        .bind(package.aur_package_id)
-        .bind(package.aur_package_base_id)
-        .bind(&package.submitter)
-        .bind(package.last_modified)
-        .bind(package.popularity)
-        .bind(&package.url_path)
-        .bind(now)
-        .bind(now)
-        .execute(&mut *transaction)
-        .await?;
-    }
-
-    transaction.commit().await?;
-    info!(packages = packages.len(), "updated package version index");
-    Ok(())
+    Ok(packages
+        .into_iter()
+        .map(|package| protocol::PackageVersion {
+            package_name: package.package_name,
+            version: package.version,
+            package_base: package.package_base,
+            aur_package_id: package.aur_package_id,
+            aur_package_base_id: package.aur_package_base_id,
+            submitter: package.submitter,
+            last_modified: package.last_modified,
+            popularity: package.popularity,
+            url_path: package.url_path,
+        })
+        .collect())
 }

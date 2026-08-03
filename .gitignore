@@ -3,3 +3,6 @@
 /sqlite.db*
 /repos
 /last-info.json
+/web/build
+/web/static/_topcoat
+/web/assets/styles.generated.css

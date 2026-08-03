@@ -1,33 +1,24 @@
-use std::{path::Path, str::FromStr};
+use anyhow::Result;
+use async_trait::async_trait;
+use aur_ai_security_protocol as protocol;
+use serde::{Deserialize, Serialize};
 
-use anyhow::{Context, Result};
-use sqlx::{
-    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
-    FromRow, QueryBuilder, Sqlite, SqlitePool,
-};
-use tracing::debug;
+#[cfg(feature = "sqlite")]
+mod sqlite;
 
-pub async fn connect(path: &Path, create_if_missing: bool) -> Result<SqlitePool> {
-    let options = SqliteConnectOptions::from_str(&format!("sqlite:{}", path.display()))?
-        .create_if_missing(create_if_missing)
-        .foreign_keys(true);
-    let pool = SqlitePoolOptions::new()
-        .max_connections(5)
-        .connect_with(options)
-        .await
-        .context("failed to open SQLite database")?;
-
-    sqlx::migrate!()
-        .run(&pool)
-        .await
-        .context("failed to migrate database")?;
-
-    Ok(pool)
-}
+#[cfg(feature = "sqlite")]
+pub use sqlite::{connect, SqliteBackend};
 
 pub const PAGE_SIZE: i64 = 25;
 
-#[derive(Debug, FromRow)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct LookupKey {
+    pub package_base: String,
+    pub commit: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "sqlite", derive(sqlx::FromRow))]
 pub struct CheckSummary {
     pub package_name: String,
     pub package_base: String,
@@ -40,7 +31,8 @@ pub struct CheckSummary {
     pub checked_at: i64,
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "sqlite", derive(sqlx::FromRow))]
 pub struct CheckDetail {
     pub package_name: String,
     pub package_base: String,
@@ -55,7 +47,8 @@ pub struct CheckDetail {
     pub checked_at: i64,
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "sqlite", derive(sqlx::FromRow))]
 pub struct PackageSearchResult {
     pub package_name: String,
     pub package_base: String,
@@ -63,7 +56,8 @@ pub struct PackageSearchResult {
     pub popularity: f64,
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "sqlite", derive(sqlx::FromRow))]
 pub struct CheckLookupResult {
     pub package_base: String,
     pub pkgbuild_commit: String,
@@ -75,185 +69,34 @@ pub struct CheckLookupResult {
     pub checked_at: i64,
 }
 
-pub async fn lookup_checks(
-    pool: &SqlitePool,
-    packages: &[(&str, &str)],
-) -> Result<Vec<CheckLookupResult>, sqlx::Error> {
-    if packages.is_empty() {
-        return Ok(Vec::new());
-    }
+#[async_trait]
+pub trait Database: Send + Sync {
+    async fn lookup_checks(&self, packages: &[LookupKey]) -> Result<Vec<CheckLookupResult>>;
+    async fn recent_checks(
+        &self,
+        page: i64,
+        search: &str,
+        verdict: Option<&str>,
+    ) -> Result<(Vec<CheckSummary>, i64)>;
+    async fn repository_checks(&self, repository: &str) -> Result<Vec<CheckSummary>>;
+    async fn check_detail(&self, repository: &str, commit: &str) -> Result<Option<CheckDetail>>;
+    async fn search_packages(&self, query: &str) -> Result<Vec<PackageSearchResult>>;
+    async fn current_package_base_exists(&self, package_base: &str) -> Result<bool>;
 
-    let mut query = QueryBuilder::<Sqlite>::new(
-        r#"SELECT pv.package_base, c.pkgbuild_commit, pv.version,
-                  c.provider, c.model, c.verdict, c.explanation, c.checked_at
-           FROM checks c
-           JOIN package_versions pv ON pv.id = c.package_version_id
-           WHERE "#,
-    );
-    for (index, (package_base, commit)) in packages.iter().enumerate() {
-        if index > 0 {
-            query.push(" OR ");
-        }
-        query
-            .push("(pv.package_base = ")
-            .push_bind(*package_base)
-            .push(" AND c.pkgbuild_commit = ")
-            .push_bind(*commit)
-            .push(")");
-    }
-    query.push(" ORDER BY c.checked_at DESC, c.id DESC");
+    async fn begin_index(&self, seen_at: i64) -> Result<()>;
 
-    let checks = query.build_query_as().fetch_all(pool).await?;
-    debug!(
-        requested = packages.len(),
-        returned = checks.len(),
-        "looked up checks"
-    );
-    Ok(checks)
-}
+    async fn upsert_index_batch(
+        &self,
+        seen_at: i64,
+        packages: &[protocol::PackageVersion],
+    ) -> Result<usize>;
 
-pub async fn recent_checks(
-    pool: &SqlitePool,
-    page: i64,
-    search: &str,
-    verdict: Option<&str>,
-) -> Result<(Vec<CheckSummary>, i64), sqlx::Error> {
-    let pattern = format!("%{search}%");
-    let verdict = verdict.unwrap_or("");
-    let total: i64 = sqlx::query_scalar(
-        r#"SELECT COUNT(*)
-           FROM checks c
-           JOIN package_versions pv ON pv.id = c.package_version_id
-           WHERE (? = '' OR pv.package_name LIKE ? OR pv.package_base LIKE ?)
-             AND (? = '' OR c.verdict = ?)"#,
-    )
-    .bind(search)
-    .bind(&pattern)
-    .bind(&pattern)
-    .bind(verdict)
-    .bind(verdict)
-    .fetch_one(pool)
-    .await?;
-    let checks = sqlx::query_as(
-        r#"SELECT pv.package_name, pv.package_base, pv.version,
-                  c.provider, c.model, c.pkgbuild_commit,
-                  c.verdict, c.explanation, c.checked_at
-           FROM checks c
-           JOIN package_versions pv ON pv.id = c.package_version_id
-           WHERE (? = '' OR pv.package_name LIKE ? OR pv.package_base LIKE ?)
-             AND (? = '' OR c.verdict = ?)
-           ORDER BY c.checked_at DESC, c.id DESC
-           LIMIT ? OFFSET ?"#,
-    )
-    .bind(search)
-    .bind(&pattern)
-    .bind(&pattern)
-    .bind(verdict)
-    .bind(verdict)
-    .bind(PAGE_SIZE)
-    .bind((page - 1) * PAGE_SIZE)
-    .fetch_all(pool)
-    .await?;
-    debug!(
-        page,
-        search,
-        verdict,
-        returned = checks.len(),
-        total,
-        "loaded recent checks"
-    );
-    Ok((checks, total))
-}
+    async fn finish_index(&self, seen_at: i64) -> Result<()>;
 
-pub async fn repository_checks(
-    pool: &SqlitePool,
-    repository: &str,
-) -> Result<Vec<CheckSummary>, sqlx::Error> {
-    let checks = sqlx::query_as(
-        r#"SELECT pv.package_name, pv.package_base, pv.version,
-                  c.provider, c.model, c.pkgbuild_commit,
-                  c.verdict, c.explanation, c.checked_at
-           FROM checks c
-           JOIN package_versions pv ON pv.id = c.package_version_id
-           WHERE pv.package_base = ?
-           ORDER BY c.checked_at DESC, c.id DESC"#,
-    )
-    .bind(repository)
-    .fetch_all(pool)
-    .await?;
-    debug!(
-        repository,
-        returned = checks.len(),
-        "loaded repository checks"
-    );
-    Ok(checks)
-}
+    async fn candidates(
+        &self,
+        request: &protocol::CandidateRequest,
+    ) -> Result<Vec<protocol::Candidate>>;
 
-pub async fn check_detail(
-    pool: &SqlitePool,
-    repository: &str,
-    commit: &str,
-) -> Result<Option<CheckDetail>, sqlx::Error> {
-    let check = sqlx::query_as(
-        r#"SELECT pv.package_name, pv.package_base, pv.version,
-                  c.provider, c.model, c.pkgbuild_commit,
-                  c.verdict, c.explanation, c.commit_diff, c.pkgbuild, c.checked_at
-           FROM checks c
-           JOIN package_versions pv ON pv.id = c.package_version_id
-           WHERE pv.package_base = ? AND c.pkgbuild_commit = ?
-           ORDER BY c.checked_at DESC, c.id DESC
-           LIMIT 1"#,
-    )
-    .bind(repository)
-    .bind(commit)
-    .fetch_optional(pool)
-    .await?;
-    debug!(
-        repository,
-        commit,
-        found = check.is_some(),
-        "loaded check detail"
-    );
-    Ok(check)
-}
-
-pub async fn search_packages(
-    pool: &SqlitePool,
-    query: &str,
-) -> Result<Vec<PackageSearchResult>, sqlx::Error> {
-    let pattern = format!("%{query}%");
-    let packages = sqlx::query_as(
-        r#"SELECT pv.package_name, pv.package_base, pv.version, pv.popularity
-           FROM package_versions pv
-           WHERE pv.is_current = 1
-             AND (pv.package_name LIKE ? OR pv.package_base LIKE ?)
-           ORDER BY pv.popularity DESC, pv.package_name
-           LIMIT 100"#,
-    )
-    .bind(&pattern)
-    .bind(&pattern)
-    .fetch_all(pool)
-    .await?;
-    debug!(
-        query,
-        returned = packages.len(),
-        "searched current packages"
-    );
-    Ok(packages)
-}
-
-pub async fn current_package_base_exists(
-    pool: &SqlitePool,
-    package_base: &str,
-) -> Result<bool, sqlx::Error> {
-    sqlx::query_scalar(
-        r#"SELECT EXISTS (
-               SELECT 1
-               FROM package_versions
-               WHERE package_base = ? AND is_current = 1
-           )"#,
-    )
-    .bind(package_base)
-    .fetch_one(pool)
-    .await
+    async fn upsert_checks(&self, checks: &[protocol::CheckResult]) -> Result<usize>;
 }

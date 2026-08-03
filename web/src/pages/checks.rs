@@ -95,7 +95,7 @@ async fn checks_page(cx: &Cx) -> Result {
         Some("dangerous") => Some("dangerous"),
         _ => None,
     };
-    let (checks, total) = db::recent_checks(database(cx), page, search, verdict).await?;
+    let (checks, total) = database(cx).recent_checks(page, search, verdict).await?;
     let pages = ((total + db::PAGE_SIZE - 1) / db::PAGE_SIZE).max(1);
 
     view! {
@@ -194,8 +194,8 @@ async fn checks_page(cx: &Cx) -> Result {
 #[page("/checks/{repo}")]
 async fn repository_page(cx: &Cx) -> Result {
     let repo = path_param::<Repo>(cx);
-    let history = db::repository_checks(database(cx), repo).await?;
-    if history.is_empty() && !db::current_package_base_exists(database(cx), repo).await? {
+    let history = database(cx).repository_checks(repo).await?;
+    if history.is_empty() && !database(cx).current_package_base_exists(repo).await? {
         return Err(not_found().into());
     }
 
@@ -237,7 +237,7 @@ async fn check_detail_page(cx: &Cx) -> Result {
     let commit = path_param::<Commit>(cx);
     let query = query_params::<CheckDetailQuery>(cx)?;
     let show_pkgbuild = query.view.as_deref() == Some("pkgbuild");
-    let Some(check) = db::check_detail(database(cx), repo, commit).await? else {
+    let Some(check) = database(cx).check_detail(repo, commit).await? else {
         debug!(repository = repo, commit, "check detail was not found");
         return Err(not_found().into());
     };

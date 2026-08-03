@@ -39,6 +39,7 @@ impl AiProvider for Codex {
                 .arg("--ignore-user-config")
                 .args(["-c", "features.shell_tool=false"])
                 .args(["-c", "web_search=\"disabled\""])
+                .args(["-c", "model_reasoning_effort=\"minimal\""])
                 .args(["--model", model])
                 .arg("--output-schema")
                 .arg(schema_file.path())

@@ -1,12 +1,13 @@
 use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 mod aur;
 mod check;
+mod remote;
 mod since;
 
 #[derive(Clone, Copy, Debug, clap::ValueEnum)]
@@ -36,6 +37,14 @@ struct Cli {
     /// SQLite database path.
     #[arg(long, default_value = "sqlite.db", global = true)]
     database: PathBuf,
+
+    /// Remote Worker URL. When set, database commands use the authenticated HTTP API.
+    #[arg(long, env = "AUR_SECURITY_REMOTE_URL", global = true)]
+    remote_url: Option<String>,
+
+    /// Bearer token for authenticated remote database commands.
+    #[arg(long, env = "AUR_SECURITY_API_TOKEN", global = true)]
+    api_token: Option<String>,
 
     #[command(subcommand)]
     command: Command,
@@ -67,32 +76,92 @@ enum Command {
         /// Provider model name.
         #[arg(long)]
         model: String,
+
+        /// Number of package checks to run concurrently. Defaults to available CPU cores.
+        #[arg(
+            long,
+            alias = "jobs",
+            env = "AUR_SECURITY_CHECK_PARALLELISM",
+            value_name = "N",
+            default_value_t = default_parallelism(),
+            value_parser = parse_parallelism
+        )]
+        parallelism: usize,
     },
+}
+
+fn default_parallelism() -> usize {
+    std::thread::available_parallelism()
+        .map(usize::from)
+        .unwrap_or(1)
+}
+
+fn parse_parallelism(value: &str) -> Result<usize, String> {
+    let parallelism = value
+        .parse::<usize>()
+        .map_err(|_| format!("{value:?} is not a positive integer"))?;
+    if parallelism == 0 {
+        return Err("parallelism must be at least 1".to_owned());
+    }
+    Ok(parallelism)
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    dotenvy::dotenv().ok();
     init_logging();
     let cli = Cli::parse();
-    info!(database = %cli.database.display(), "starting AUR AI security CLI");
-    let pool = aur_ai_security_db::connect(&cli.database, true).await?;
+    if let Some(remote_url) = cli.remote_url {
+        let token = cli
+            .api_token
+            .context("--api-token or AUR_SECURITY_API_TOKEN is required with --remote-url")?;
+        let client = remote::RemoteClient::new(&remote_url, token)?;
+        info!(remote_url, "starting AUR Security CLI in remote mode");
+        return match cli.command {
+            Command::UpdateIndex => aur::update_index(&client).await,
+            Command::Check {
+                dry_run,
+                filter,
+                since,
+                provider,
+                model,
+                parallelism,
+            } => {
+                check::run(
+                    &client,
+                    dry_run,
+                    &filter,
+                    since.map(since::Since::timestamp),
+                    provider.into(),
+                    &model,
+                    parallelism,
+                )
+                .await
+            }
+        };
+    }
 
+    info!(database = %cli.database.display(), "starting AUR Security CLI");
+    let pool = aur_ai_security_db::connect(&cli.database, true).await?;
+    let database = aur_ai_security_db::SqliteBackend::new(pool);
     match cli.command {
-        Command::UpdateIndex => aur::update_index(&pool).await,
+        Command::UpdateIndex => aur::update_index(&database).await,
         Command::Check {
             dry_run,
             filter,
             since,
             provider,
             model,
+            parallelism,
         } => {
             check::run(
-                &pool,
+                &database,
                 dry_run,
                 &filter,
                 since.map(since::Since::timestamp),
                 provider.into(),
                 &model,
+                parallelism,
             )
             .await
         }
@@ -130,4 +199,48 @@ fn logging_filter() -> EnvFilter {
         }
     }
     filter
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use super::*;
+
+    #[test]
+    fn parses_parallelism_override() {
+        let cli = Cli::try_parse_from([
+            "aur_ai_security",
+            "check",
+            "--provider",
+            "openai",
+            "--model",
+            "test",
+            "--parallelism",
+            "3",
+        ])
+        .unwrap();
+
+        let Command::Check { parallelism, .. } = cli.command else {
+            panic!("expected check command");
+        };
+        assert_eq!(parallelism, 3);
+    }
+
+    #[test]
+    fn rejects_zero_parallelism() {
+        let error = Cli::try_parse_from([
+            "aur_ai_security",
+            "check",
+            "--provider",
+            "openai",
+            "--model",
+            "test",
+            "--parallelism",
+            "0",
+        ])
+        .unwrap_err();
+
+        assert!(error.to_string().contains("parallelism must be at least 1"));
+    }
 }

@@ -5,21 +5,38 @@ edition.workspace = true
 repository.workspace = true
 license.workspace = true
 
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
 [dependencies]
 anyhow.workspace = true
-aur_ai_security_db = { path = "../db" }
+async-trait.workspace = true
+aur_ai_security_protocol = { path = "../protocol" }
 chrono.workspace = true
-clap.workspace = true
 pulldown-cmark.workspace = true
-sqlx.workspace = true
 serde.workspace = true
-tokio.workspace = true
-topcoat = { workspace = true, features = ["tailwind"] }
 tracing.workspace = true
-tracing-subscriber.workspace = true
 
 [build-dependencies]
 topcoat = { version = "0.5", default-features = false, features = ["tailwind"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+aur_ai_security_db = { path = "../db", features = ["sqlite"] }
+clap.workspace = true
+sqlx.workspace = true
+tokio.workspace = true
+topcoat = { workspace = true, features = ["asset", "discover", "router", "runtime", "serve", "tailwind"] }
+tracing-subscriber.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+aur_ai_security_db = { path = "../db", default-features = false }
+getrandom = { version = "0.2", features = ["js"] }
+http.workspace = true
+topcoat = { workspace = true, default-features = false, features = ["asset", "discover", "router", "runtime"] }
+worker = { version = "0.8", features = ["d1", "http"] }
+worker-macros = { version = "0.8", features = ["http"] }
+wasm-bindgen.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

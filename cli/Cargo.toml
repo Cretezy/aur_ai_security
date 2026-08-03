@@ -9,9 +9,13 @@ license.workspace = true
 anyhow.workspace = true
 aur_ai_security_checker = { path = "../checker" }
 aur_ai_security_db = { path = "../db" }
+aur_ai_security_protocol = { path = "../protocol" }
+async-trait.workspace = true
 chrono.workspace = true
 clap.workspace = true
+dotenvy.workspace = true
 flate2.workspace = true
+futures.workspace = true
 humantime.workspace = true
 reqwest.workspace = true
 serde.workspace = true
