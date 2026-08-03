@@ -14,6 +14,7 @@ enum ProviderArg {
     Openai,
     Anthropic,
     Openrouter,
+    Claude,
     Codex,
 }
 
@@ -23,6 +24,7 @@ impl From<ProviderArg> for aur_ai_security_checker::Provider {
             ProviderArg::Openai => Self::Openai,
             ProviderArg::Anthropic => Self::Anthropic,
             ProviderArg::Openrouter => Self::Openrouter,
+            ProviderArg::Claude => Self::Claude,
             ProviderArg::Codex => Self::Codex,
         }
     }

@@ -166,7 +166,7 @@ An assessment contains:
 | --- | --- | --- |
 | `verdict` | string | Assessment verdict: `safe`, `suspicious`, or `dangerous`. |
 | `explanation` | string or null | Provider explanation, when one was recorded. |
-| `provider` | string | Provider used for the check, such as `openai`, `anthropic`, `openrouter`, or `codex`. |
+| `provider` | string | Provider used for the check, such as `openai`, `anthropic`, `openrouter`, `claude`, or `codex`. |
 | `model` | string | Model identifier used for the check. |
 | `checked_at` | integer | Time the check completed, as Unix seconds. |
 | `version` | string | AUR package version associated with the check. |

@@ -5,7 +5,7 @@ use tokio::process::Command;
 use tracing::debug;
 
 use super::{
-    package_prompt, parse_codex_assessment, AiProvider, CodexAssessment, ProviderFuture,
+    package_prompt, parse_codex_assessment, AiProvider, CliAssessment, ProviderFuture,
     REVIEW_PROMPT,
 };
 
@@ -22,7 +22,7 @@ impl AiProvider for Codex {
     ) -> ProviderFuture<'a> {
         Box::pin(async move {
             let mut schema_file = tempfile::NamedTempFile::new()?;
-            serde_json::to_writer(&mut schema_file, &schemars::schema_for!(CodexAssessment))?;
+            serde_json::to_writer(&mut schema_file, &schemars::schema_for!(CliAssessment))?;
             schema_file.flush()?;
 
             let prompt = package_prompt(package_name, pkgbuild, commit_diff);

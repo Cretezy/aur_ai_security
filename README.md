@@ -16,7 +16,7 @@ A familiar or orphaned package can receive a malicious update through the same w
 
 1. `update-index` downloads current AUR metadata and appends newly seen package versions to SQLite.
 2. `check` selects current, unchecked versions, clones each package-base repository, and records its commit, `PKGBUILD`, and diff.
-3. OpenAI, Anthropic, OpenRouter, or the Codex CLI reviews the package in repository context.
+3. OpenAI, Anthropic, OpenRouter, the Claude CLI, or the Codex CLI reviews the package in repository context.
 4. The verdict and supporting evidence are stored separately from package metadata and exposed through the web interface and API.
 
 ## Demo
@@ -41,7 +41,7 @@ AurSecurityModel = gpt-5.6-luna
 # SkipAurSecurity
 ```
 
-`AurSecurityRemoteUrl` is optional and defaults to the hosted service. Omit `AurSecurityRemote` to use local assessment only. `AurSecurityProvider` accepts `openai`, `anthropic`, `openrouter`, or `codex`; `AurSecurityModel` is the corresponding model identifier described in [AI providers](#ai-providers). API providers require their matching environment variable, while `codex` requires an installed and authenticated Codex CLI.
+`AurSecurityRemoteUrl` is optional and defaults to the hosted service. Omit `AurSecurityRemote` to use local assessment only. `AurSecurityProvider` accepts `openai`, `anthropic`, `openrouter`, `claude`, or `codex`; `AurSecurityModel` is the corresponding model identifier described in [AI providers](#ai-providers). API providers require their matching environment variable, while `claude` and `codex` require their corresponding installed and authenticated CLI.
 
 One aggregate assessment is printed per package before the transaction table, whose verbose form includes a security-status column. A package is safe only when the whole range is covered and safe; dangerous outranks suspicious, which outranks unavailable coverage. Before review, `paru` asks whether safely assessed packages should be skipped; `SkipSafeReviews` makes skipping them the default answer and advances paru's accepted Git baseline. Suspicious, dangerous, unreviewed, and failed assessments remain in the normal review flow. With `--noconfirm`, a dangerous verdict aborts the transaction. `SkipAurSecurity` or `--skipaursecurity` disables the integration.
 
@@ -61,7 +61,7 @@ This is a review aid, not proof that a package is safe. It does not analyze down
 
 ## Quick start
 
-You need Rust, Cargo, Git access to `aur.archlinux.org`, and either API credentials or an installed and authenticated Codex CLI.
+You need Rust, Cargo, Git access to `aur.archlinux.org`, and either API credentials or an installed and authenticated Claude Code or Codex CLI.
 
 Download the current AUR index:
 
@@ -113,7 +113,7 @@ Stored metadata includes package and package-base identifiers, version, submitte
 cargo run -p aur_ai_security -- check --provider <PROVIDER> --model <MODEL> [OPTIONS]
 ```
 
-Supported providers are `openai`, `anthropic`, `openrouter`, and `codex`. Useful filters include:
+Supported providers are `openai`, `anthropic`, `openrouter`, `claude`, and `codex`. Useful filters include:
 
 ```bash
 # Exact package names
@@ -140,11 +140,12 @@ Supported providers are `openai`, `anthropic`, `openrouter`, and `codex`. Useful
 | OpenAI | `OPENAI_API_KEY` | OpenAI model name |
 | Anthropic | `ANTHROPIC_API_KEY` | Anthropic model name |
 | OpenRouter | `OPENROUTER_API_KEY` | Usually `provider/model` |
+| Claude CLI | Installed and authenticated Claude Code CLI | Claude model name or alias |
 | Codex CLI | Installed and authenticated Codex CLI | Codex model name |
 
 The API providers use [Rig](https://github.com/0xPlaygrounds/rig). Their only repository tool, `read_file`, can inspect UTF-8 text files up to 128 KiB inside the clone; absolute paths, parent traversal, and symlinks resolving outside the clone are rejected. Structured-output support through OpenRouter depends on the upstream model.
 
-The Codex provider runs `codex exec` from the clone in an ephemeral session. It ignores user configuration, disables shell tools and web search, and supplies the assessment JSON schema.
+The Claude provider runs `claude` from the clone in a non-persistent safe-mode session. It ignores project and user customizations, denies interactive permission requests, limits repository access to the built-in `Read`, `Glob`, and `Grep` tools, and supplies the assessment JSON schema. The Codex provider runs `codex exec` from the clone in an ephemeral session. It ignores user configuration, disables shell tools and web search, and supplies the same schema.
 
 ## Results and storage
 

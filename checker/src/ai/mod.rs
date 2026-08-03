@@ -10,6 +10,7 @@ use serde::Deserialize;
 use tracing::debug;
 
 mod anthropic;
+mod claude;
 mod codex;
 mod openai;
 mod openrouter;
@@ -74,6 +75,7 @@ pub enum Provider {
     Openai,
     Anthropic,
     Openrouter,
+    Claude,
     Codex,
 }
 
@@ -83,6 +85,7 @@ impl Provider {
             Self::Openai => "openai",
             Self::Anthropic => "anthropic",
             Self::Openrouter => "openrouter",
+            Self::Claude => "claude",
             Self::Codex => "codex",
         }
     }
@@ -92,6 +95,7 @@ impl Provider {
             Self::Openai => Box::new(openai::OpenAi),
             Self::Anthropic => Box::new(anthropic::Anthropic),
             Self::Openrouter => Box::new(openrouter::OpenRouter),
+            Self::Claude => Box::new(claude::Claude),
             Self::Codex => Box::new(codex::Codex),
         }
     }
@@ -116,7 +120,7 @@ pub enum Verdict {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub(super) struct CodexAssessment {
+pub(super) struct CliAssessment {
     classification: Classification,
     /// Empty only when classification is safe; otherwise explain the concrete concern.
     explanation: String,
@@ -190,9 +194,13 @@ pub(super) fn parse_assessment(response: &str) -> Result<Assessment> {
 }
 
 pub(super) fn parse_codex_assessment(response: &str) -> Result<Assessment> {
-    let wire: CodexAssessment =
+    let wire: CliAssessment =
         serde_json::from_str(response.trim()).context("Codex returned an invalid assessment")?;
 
+    cli_assessment(wire)
+}
+
+pub(super) fn cli_assessment(wire: CliAssessment) -> Result<Assessment> {
     let explanation = wire.explanation.trim().to_owned();
     let verdict = match wire.classification {
         Classification::Safe => Verdict::Safe,
@@ -215,7 +223,7 @@ mod tests {
 
     #[test]
     fn codex_schema_does_not_use_one_of() {
-        let schema = serde_json::to_value(schemars::schema_for!(CodexAssessment)).unwrap();
+        let schema = serde_json::to_value(schemars::schema_for!(CliAssessment)).unwrap();
         assert!(!schema.to_string().contains("oneOf"));
         assert_eq!(schema["additionalProperties"], false);
     }
