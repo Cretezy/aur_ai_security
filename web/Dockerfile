@@ -2,17 +2,18 @@ FROM rust:1.95-bookworm AS builder
 
 WORKDIR /app
 
+RUN cargo install topcoat-cli --version 0.5.0 --locked
+
 COPY Cargo.toml Cargo.lock ./
 COPY checker ./checker
 COPY cli ./cli
 COPY db ./db
 COPY web ./web
 
-RUN cargo install topcoat-cli --version 0.5.0 --locked \
-    && topcoat asset bundle \
-        --release \
-        --package aur_ai_security_web \
-        --out /app/dist/assets
+RUN topcoat asset bundle \
+    --release \
+    --package aur_ai_security_web \
+    --out /app/dist/assets
 
 
 FROM debian:bookworm-slim AS runtime

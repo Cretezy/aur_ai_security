@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use anyhow::{anyhow, Context, Result};
 use git2::{DiffOptions, Patch, Repository};
 use tracing::debug;
@@ -26,8 +28,25 @@ pub async fn check_package(
     let directory = tempfile::tempdir()?;
     let url = format!("https://aur.archlinux.org/{package_base}.git");
     debug!(package_name, package_base, %url, "cloning AUR repository");
-    let repository = Repository::clone(&url, directory.path())
-        .with_context(|| format!("failed to clone {url}"))?;
+    Repository::clone(&url, directory.path()).with_context(|| format!("failed to clone {url}"))?;
+    check_repository(provider, model, package_name, directory.path(), None).await
+}
+
+/// Checks an existing AUR repository at `HEAD`.
+///
+/// When `baseline` is present, the AI receives the cumulative tree diff from
+/// that revision to `HEAD`. Otherwise, the diff is taken from `HEAD`'s first
+/// parent, preserving [`check_package`]'s behavior for callers without a
+/// previously reviewed revision.
+pub async fn check_repository(
+    provider: Provider,
+    model: &str,
+    package_name: &str,
+    repository_path: &Path,
+    baseline: Option<&str>,
+) -> Result<PackageCheck> {
+    let repository = Repository::open(repository_path)
+        .with_context(|| format!("failed to open {}", repository_path.display()))?;
     let commit = repository.head()?.peel_to_commit()?;
     let tree = commit.tree()?;
     let entry = tree
@@ -35,7 +54,7 @@ pub async fn check_package(
         .ok_or_else(|| anyhow!("repository has no PKGBUILD"))?;
     let blob = repository.find_blob(entry.id())?;
     let pkgbuild = std::str::from_utf8(blob.content()).context("PKGBUILD is not UTF-8")?;
-    let commit_diff = commit_diff(&repository, &commit)?;
+    let commit_diff = commit_diff(&repository, &commit, baseline)?;
     debug!(
         package_name,
         commit = %commit.id(),
@@ -49,7 +68,7 @@ pub async fn check_package(
         package_name,
         pkgbuild,
         &commit_diff,
-        directory.path(),
+        repository_path,
     )
     .await?;
     Ok(PackageCheck {
@@ -60,16 +79,27 @@ pub async fn check_package(
     })
 }
 
-fn commit_diff(repository: &Repository, commit: &git2::Commit<'_>) -> Result<String> {
+fn commit_diff(
+    repository: &Repository,
+    commit: &git2::Commit<'_>,
+    baseline: Option<&str>,
+) -> Result<String> {
     let current_tree = commit.tree()?;
-    let parent_tree = if commit.parent_count() == 0 {
-        None
-    } else {
-        Some(commit.parent(0)?.tree()?)
+    let baseline_tree = match baseline {
+        Some(revision) => Some(
+            repository
+                .revparse_single(revision)
+                .with_context(|| format!("failed to resolve baseline revision {revision}"))?
+                .peel_to_commit()
+                .with_context(|| format!("baseline revision {revision} is not a commit"))?
+                .tree()?,
+        ),
+        None if commit.parent_count() == 0 => None,
+        None => Some(commit.parent(0)?.tree()?),
     };
     let mut options = DiffOptions::new();
     let diff = repository.diff_tree_to_tree(
-        parent_tree.as_ref(),
+        baseline_tree.as_ref(),
         Some(&current_tree),
         Some(&mut options),
     )?;
@@ -158,9 +188,50 @@ mod tests {
         drop(tree);
         let commit = repository.find_commit(commit_id).unwrap();
 
-        let rendered = commit_diff(&repository, &commit).unwrap();
+        let rendered = commit_diff(&repository, &commit, None).unwrap();
         assert!(rendered.starts_with("diff --git a/PKGBUILD b/PKGBUILD"));
         assert!(rendered.contains("diff --git a/z-file b/z-file"));
         assert!(rendered.contains("diff omitted: file patch is"));
+    }
+
+    #[test]
+    fn commit_diff_uses_the_explicit_cumulative_baseline() {
+        let directory = tempfile::tempdir().unwrap();
+        let repository = Repository::init(directory.path()).unwrap();
+        let signature = Signature::now("Test", "test@example.com").unwrap();
+
+        fs::write(directory.path().join("PKGBUILD"), "pkgver=1\n").unwrap();
+        let baseline = commit_all(&repository, &signature, "initial", &[]);
+
+        fs::write(directory.path().join("install.sh"), "echo added\n").unwrap();
+        let parent = repository.find_commit(baseline).unwrap();
+        let middle = commit_all(&repository, &signature, "add install", &[&parent]);
+        drop(parent);
+
+        fs::write(directory.path().join("PKGBUILD"), "pkgver=2\n").unwrap();
+        let parent = repository.find_commit(middle).unwrap();
+        let head_id = commit_all(&repository, &signature, "bump", &[&parent]);
+        drop(parent);
+
+        let head = repository.find_commit(head_id).unwrap();
+        let rendered = commit_diff(&repository, &head, Some(&baseline.to_string())).unwrap();
+        assert!(rendered.starts_with("diff --git a/PKGBUILD b/PKGBUILD"));
+        assert!(rendered.contains("diff --git a/install.sh b/install.sh"));
+        assert!(rendered.contains("+pkgver=2"));
+    }
+
+    fn commit_all(
+        repository: &Repository,
+        signature: &Signature<'_>,
+        message: &str,
+        parents: &[&git2::Commit<'_>],
+    ) -> git2::Oid {
+        let mut index = repository.index().unwrap();
+        index.add_all(["*"], IndexAddOption::DEFAULT, None).unwrap();
+        let tree_id = index.write_tree().unwrap();
+        let tree = repository.find_tree(tree_id).unwrap();
+        repository
+            .commit(Some("HEAD"), signature, signature, message, &tree, parents)
+            .unwrap()
     }
 }

@@ -181,7 +181,7 @@ pub(super) fn package_prompt(package_name: &str, pkgbuild: &str, commit_diff: &s
     };
 
     format!(
-        "Package: {package_name}\n\nCurrent PKGBUILD:\n```bash\n{pkgbuild}\n```\n\nChanges from the first parent commit (PKGBUILD is listed first when changed):\n```diff\n{diff}{truncation_notice}\n```"
+        "Package: {package_name}\n\nCurrent PKGBUILD:\n```bash\n{pkgbuild}\n```\n\nChanges from the review baseline to the current commit (PKGBUILD is listed first when changed):\n```diff\n{diff}{truncation_notice}\n```"
     )
 }
 

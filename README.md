@@ -27,7 +27,7 @@ Click the screenshot to open the [live demo](https://aur-security.cretezy.com/).
 
 ## `paru` integration
 
-The experimental [`aur-ai-security` branch](https://github.com/Cretezy/paru/tree/aur-ai-security) checks the hosted API first, then locally assesses packages without a remote result using your configured provider and model. It runs after downloading AUR repositories and before executing pre-build commands or starting the build.
+The experimental [`aur-ai-security` branch](https://github.com/Cretezy/paru/tree/aur-ai-security) checks every AUR commit since paru's accepted baseline against the hosted API. When any commit is missing remotely, it locally assesses the cumulative baseline-to-current diff using your configured provider and model. It runs after downloading AUR repositories and before executing pre-build commands or starting the build.
 
 These `paru.conf` options enable remote lookups with a local Codex fallback:
 
@@ -43,7 +43,7 @@ AurSecurityModel = gpt-5.6-luna
 
 `AurSecurityRemoteUrl` is optional and defaults to the hosted service. Omit `AurSecurityRemote` to use local assessment only. `AurSecurityProvider` accepts `openai`, `anthropic`, `openrouter`, or `codex`; `AurSecurityModel` is the corresponding model identifier described in [AI providers](#ai-providers). API providers require their matching environment variable, while `codex` requires an installed and authenticated Codex CLI.
 
-Assessments are printed before the transaction table, whose verbose form includes a security-status column. Before review, `paru` asks whether safely assessed packages should be skipped; `SkipSafeReviews` makes skipping them the default answer. Suspicious, dangerous, unreviewed, and failed assessments remain in the normal review flow. With `--noconfirm`, a dangerous verdict aborts the transaction. `SkipAurSecurity` or `--skipaursecurity` disables the integration.
+One aggregate assessment is printed per package before the transaction table, whose verbose form includes a security-status column. A package is safe only when the whole range is covered and safe; dangerous outranks suspicious, which outranks unavailable coverage. Before review, `paru` asks whether safely assessed packages should be skipped; `SkipSafeReviews` makes skipping them the default answer and advances paru's accepted Git baseline. Suspicious, dangerous, unreviewed, and failed assessments remain in the normal review flow. With `--noconfirm`, a dangerous verdict aborts the transaction. `SkipAurSecurity` or `--skipaursecurity` disables the integration.
 
 ![paru displaying remote and local AUR security assessments before an upgrade](docs/paru-example.png)
 
@@ -168,7 +168,7 @@ topcoat dev --package aur_ai_security_web
 
 It listens on `http://127.0.0.1:3000` by default. Use `HOST`, `PORT`, and `AUR_AI_SECURITY_DATABASE` to customize the server. The interface provides package search, verdict filters, check history, complete PKGBUILDs, and highlighted diffs.
 
-The JSON API includes `POST /api/v1/checks/lookup` for batch assessment lookup by package base and commit.
+The JSON API includes `POST /api/v1/checks/lookup` for batch assessment lookup by package base and ordered commit list.
 
 For production, bundle the generated assets before starting the server:
 

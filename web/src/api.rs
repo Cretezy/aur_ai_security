@@ -20,7 +20,7 @@ struct LookupRequest {
 #[derive(Debug, Deserialize)]
 struct LookupPackage {
     package_base: String,
-    commit: String,
+    commits: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -31,6 +31,11 @@ struct LookupResponse {
 #[derive(Debug, Serialize)]
 struct LookupResult {
     package_base: String,
+    commits: Vec<LookupCommitResult>,
+}
+
+#[derive(Debug, Serialize)]
+struct LookupCommitResult {
     commit: String,
     assessment: Option<Assessment>,
 }
@@ -56,11 +61,11 @@ async fn lookup_checks(
     let normalized = request
         .packages
         .iter()
-        .map(|package| {
-            (
-                package.package_base.as_str(),
-                package.commit.to_ascii_lowercase(),
-            )
+        .flat_map(|package| {
+            package
+                .commits
+                .iter()
+                .map(|commit| (package.package_base.as_str(), commit.to_ascii_lowercase()))
         })
         .collect::<Vec<_>>();
     let requested = normalized
@@ -92,14 +97,20 @@ async fn lookup_checks(
         .packages
         .into_iter()
         .map(|package| {
-            let key = (
-                package.package_base.clone(),
-                package.commit.to_ascii_lowercase(),
-            );
+            let commits = package
+                .commits
+                .into_iter()
+                .map(|commit| {
+                    let key = (package.package_base.clone(), commit.to_ascii_lowercase());
+                    LookupCommitResult {
+                        commit,
+                        assessment: assessments.get(&key).cloned(),
+                    }
+                })
+                .collect();
             LookupResult {
                 package_base: package.package_base,
-                commit: package.commit,
-                assessment: assessments.get(&key).cloned(),
+                commits,
             }
         })
         .collect();
@@ -108,12 +119,7 @@ async fn lookup_checks(
 }
 
 fn validate_request(request: &LookupRequest) -> Result<()> {
-    if request.packages.len() > MAX_LOOKUPS {
-        return Err(bad_request(format!(
-            "packages must contain at most {MAX_LOOKUPS} entries"
-        ))
-        .into());
-    }
+    let mut total_commits = 0usize;
 
     for (index, package) in request.packages.iter().enumerate() {
         if !valid_package_base(&package.package_base) {
@@ -122,13 +128,26 @@ fn validate_request(request: &LookupRequest) -> Result<()> {
             ))
             .into());
         }
-        if package.commit.len() != 40
-            || !package.commit.bytes().all(|byte| byte.is_ascii_hexdigit())
-        {
+        if package.commits.is_empty() {
             return Err(bad_request(format!(
-                "packages[{index}].commit must be a 40-character hexadecimal commit"
+                "packages[{index}].commits must contain at least one commit"
             ))
             .into());
+        }
+        total_commits = total_commits.saturating_add(package.commits.len());
+        if total_commits > MAX_LOOKUPS {
+            return Err(bad_request(format!(
+                "packages must contain at most {MAX_LOOKUPS} commits"
+            ))
+            .into());
+        }
+        for (commit_index, commit) in package.commits.iter().enumerate() {
+            if commit.len() != 40 || !commit.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                return Err(bad_request(format!(
+                    "packages[{index}].commits[{commit_index}] must be a 40-character hexadecimal commit"
+                ))
+                .into());
+            }
         }
     }
 
@@ -265,9 +284,11 @@ mod tests {
             &router(pool),
             json!({
                 "packages": [
-                    { "package_base": "paru", "commit": commit },
-                    { "package_base": "yay", "commit": "ffffffffffffffffffffffffffffffffffffffff" },
-                    { "package_base": "paru", "commit": uppercase_commit }
+                    {
+                        "package_base": "paru",
+                        "commits": [commit, "ffffffffffffffffffffffffffffffffffffffff"]
+                    },
+                    { "package_base": "paru", "commits": [uppercase_commit] }
                 ]
             }),
         )
@@ -280,34 +301,39 @@ mod tests {
                 "results": [
                     {
                         "package_base": "paru",
-                        "commit": commit,
-                        "assessment": {
-                            "verdict": "dangerous",
-                            "explanation": null,
-                            "provider": "codex",
-                            "model": "same-time-new",
-                            "checked_at": 20,
-                            "version": "2.1.0-1",
-                            "details_path": format!("/checks/paru/{commit}")
-                        }
-                    },
-                    {
-                        "package_base": "yay",
-                        "commit": "ffffffffffffffffffffffffffffffffffffffff",
-                        "assessment": null
+                        "commits": [
+                            {
+                                "commit": commit,
+                                "assessment": {
+                                    "verdict": "dangerous",
+                                    "explanation": null,
+                                    "provider": "codex",
+                                    "model": "same-time-new",
+                                    "checked_at": 20,
+                                    "version": "2.1.0-1",
+                                    "details_path": format!("/checks/paru/{commit}")
+                                }
+                            },
+                            {
+                                "commit": "ffffffffffffffffffffffffffffffffffffffff",
+                                "assessment": null
+                            }
+                        ]
                     },
                     {
                         "package_base": "paru",
-                        "commit": uppercase_commit,
-                        "assessment": {
-                            "verdict": "dangerous",
-                            "explanation": null,
-                            "provider": "codex",
-                            "model": "same-time-new",
-                            "checked_at": 20,
-                            "version": "2.1.0-1",
-                            "details_path": format!("/checks/paru/{commit}")
-                        }
+                        "commits": [{
+                            "commit": uppercase_commit,
+                            "assessment": {
+                                "verdict": "dangerous",
+                                "explanation": null,
+                                "provider": "codex",
+                                "model": "same-time-new",
+                                "checked_at": 20,
+                                "version": "2.1.0-1",
+                                "details_path": format!("/checks/paru/{commit}")
+                            }
+                        }]
                     }
                 ]
             })
@@ -320,12 +346,14 @@ mod tests {
         let router = router(pool);
         let valid_commit = "0123456789abcdef0123456789abcdef01234567";
         let invalid_requests = [
-            json!({ "packages": [{ "package_base": "Bad Name", "commit": valid_commit }] }),
-            json!({ "packages": [{ "package_base": "paru", "commit": "not-a-commit" }] }),
+            json!({ "packages": [{ "package_base": "Bad Name", "commits": [valid_commit] }] }),
+            json!({ "packages": [{ "package_base": "paru", "commits": ["not-a-commit"] }] }),
+            json!({ "packages": [{ "package_base": "paru", "commits": [] }] }),
             json!({
-                "packages": (0..1_001)
-                    .map(|_| json!({ "package_base": "paru", "commit": valid_commit }))
-                    .collect::<Vec<_>>()
+                "packages": [{
+                    "package_base": "paru",
+                    "commits": (0..1_001).map(|_| valid_commit).collect::<Vec<_>>()
+                }]
             }),
         ];
 

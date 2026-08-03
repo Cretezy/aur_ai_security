@@ -38,32 +38,55 @@ async fn home() -> Result {
             <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sky-300">
                 "How it works"
             </p>
-            <h2 class="mt-3 max-w-2xl text-3xl font-black tracking-tight sm:text-4xl">
-                "Package history you can actually inspect."
+            <h2 class="mt-3 text-3xl font-black tracking-tight sm:text-4xl">
+                "Security reviews that show their work."
             </h2>
             <div class="mt-8 grid gap-4 md:grid-cols-3">
                 <article class="rounded-xl border border-slate-800 bg-slate-900 p-6">
-                    <span class="text-sm font-bold text-sky-300">"01 · Index"</span>
-                    <h3 class="mt-3 text-xl font-bold">"Track every version"</h3>
+                    <span class="text-sm font-bold text-sky-300">"01 · Detect"</span>
+                    <h3 class="mt-3 text-xl font-bold">"Surface risky changes"</h3>
                     <p class="mt-2 leading-7 text-slate-400">
-                        "The current AUR index is imported into SQLite without discarding previously seen package versions."
+                        "AI-assisted reviews screen AUR PKGBUILDs and repository changes for malware, suspicious behavior, and supply-chain risk."
                     </p>
                 </article>
                 <article class="rounded-xl border border-slate-800 bg-slate-900 p-6">
-                    <span class="text-sm font-bold text-sky-300">"02 · Check"</span>
-                    <h3 class="mt-3 text-xl font-bold">"Review with AI"</h3>
+                    <span class="text-sm font-bold text-sky-300">"02 · Explain"</span>
+                    <h3 class="mt-3 text-xl font-bold">"Show the work"</h3>
                     <p class="mt-2 leading-7 text-slate-400">
-                        "A selected AI provider reviews the cloned repository, its PKGBUILD, and the commit diff for supply-chain risk."
+                        "Every verdict comes with a plain-language explanation and the exact commit, full PKGBUILD, and diff behind it."
                     </p>
                 </article>
                 <article class="rounded-xl border border-slate-800 bg-slate-900 p-6">
-                    <span class="text-sm font-bold text-sky-300">"03 · Inspect"</span>
-                    <h3 class="mt-3 text-xl font-bold">"See the evidence"</h3>
+                    <span class="text-sm font-bold text-sky-300">"03 · Verify"</span>
+                    <h3 class="mt-3 text-xl font-bold">"Make the final call"</h3>
                     <p class="mt-2 leading-7 text-slate-400">
-                        "Each result preserves its verdict, explanation, full PKGBUILD, diff, commit, provider, and model."
+                        "Search checks, inspect the evidence, and decide for yourself whether a package change is safe to build and install."
                     </p>
                 </article>
             </div>
+        </section>
+        <section
+            class="grid gap-6 border-t border-slate-800 py-14 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+        >
+            <div class="max-w-3xl">
+                <p
+                    class="text-sm font-semibold uppercase tracking-[0.2em] text-sky-300"
+                >
+                    "Experimental paru integration"
+                </p>
+                <h2 class="mt-3 text-3xl font-black tracking-tight">
+                    "Review AUR changes before the build starts."
+                </h2>
+                <p class="mt-3 text-lg leading-8 text-slate-400">
+                    "The paru integration checks commits since your accepted baseline against the hosted service, then locally assesses any uncovered range. Safe packages can skip manual review; anything else stays in paru's normal review flow."
+                </p>
+            </div>
+            <a
+                class="w-fit rounded-lg border border-slate-700 px-5 py-3 font-bold text-white hover:border-slate-500 hover:bg-slate-900"
+                href="https://github.com/Cretezy/aur_ai_security#paru-integration"
+            >
+                "Read the setup on GitHub ↗"
+            </a>
         </section>
         <section
             class="grid gap-8 border-t border-slate-800 py-14 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
