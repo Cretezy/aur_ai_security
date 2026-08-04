@@ -1,33 +1,106 @@
 # AUR Security
 
-[AUR Security](https://github.com/Cretezy/aur-security) is an AI-assisted review pipeline for the [Arch User Repository](https://aur.archlinux.org/). It indexes package versions, examines AUR Git repositories for malware and supply-chain risk, and presents the evidence in a searchable web interface.
+The [Arch User Repository](https://aur.archlinux.org/) makes an enormous range
+of software easy to install, but it comes with a specific trust model: a
+`PKGBUILD` is shell code written by another user, and installing a package
+means running it.
 
-[Read the article](https://cretezy.com/2026/aur-security/) · [Try the live demo](https://aur-security.cretezy.com/)
+In June 2026, Arch published an
+[official notice about an active malicious-packages
+incident](https://archlinux.org/news/active-aur-malicious-packages-incident/).
+A [second wave reported in
+July](https://www.phoronix.com/news/Arch-Linux-AUR-Adoptions-Halted) led Arch
+to temporarily halt package adoptions. In both cases, users were asked to
+review every `PKGBUILD` and install-script change.
 
-Every assessment preserves the exact Git commit, complete `PKGBUILD`, and commit diff so that its verdict can be reviewed rather than treated as a black box.
+Reading every update by hand does not scale, but reducing the answer to “an AI
+said it was safe” is not useful either. AUR Security adds another review layer:
+it indexes package versions, examines AUR Git repositories for malware and
+supply-chain risk, and preserves the exact evidence behind every verdict.
 
-## Motivation
+[Read the article](https://cretezy.com/2026/aur-security/) ·
+[Browse the live results](https://aur-security.cretezy.com/)
 
-An AUR `PKGBUILD` or install script is code that runs while software is built and installed. During the June 2026 [active AUR malicious-packages incident](https://archlinux.org/news/active-aur-malicious-packages-incident/), Arch removed malicious commits and urged users to review every PKGBUILD and install-script change. A [second wave reported in July](https://www.phoronix.com/news/Arch-Linux-AUR-Adoptions-Halted) led Arch to temporarily halt package adoptions.
+[![A suspicious AUR package assessment with its highlighted commit diff](docs/aur-security-demo.png)](https://aur-security.cretezy.com/)
 
-A familiar or orphaned package can receive a malicious update through the same workflow as an ordinary version bump. Manual review does not scale, but an unexplained “AI says safe” result is not a useful substitute. This project surfaces unusual changes while retaining enough evidence for a person to verify each result.
+## The problem with reviewing only a PKGBUILD
+
+Looking at the current `PKGBUILD` is a useful start, but it loses the most
+important context: what changed?
+
+A package downloading a binary from its established upstream GitHub release is
+normal. The same package suddenly downloading from an unrelated domain is much
+more interesting. A new checksum is expected when the version changes; a new
+repository owner or delivery mechanism deserves attention even if the shell
+code still looks clean.
+
+The AUR stores each package base in Git, so the useful unit of review is a
+package version together with its repository commit, complete `PKGBUILD`, and
+the diff that introduced it.
 
 ## How it works
 
-1. `update-index` downloads current AUR metadata and appends newly seen package versions to SQLite.
-2. `check` selects current, unchecked versions, clones each package-base repository, and records its commit, `PKGBUILD`, and diff.
-3. OpenAI, Anthropic, OpenRouter, the Claude CLI, or the Codex CLI reviews the package in repository context.
-4. The verdict and supporting evidence are stored separately from package metadata and exposed through the web interface and API.
+The core is a reusable AI checker. A CLI uses it to review packages collected
+by the indexer, while a web application catalogs the resulting assessments and
+their evidence.
 
-## Demo
+### [Checker library](checker/)
 
-[![AUR Security showing a suspicious package assessment and highlighted commit diff](docs/aur-security-demo.png)](https://aur-security.cretezy.com/)
+For each update, the checker:
 
-Click the screenshot to open the [live demo](https://aur-security.cretezy.com/).
+1. opens the AUR Git repository;
+2. records the current commit;
+3. reads the complete `PKGBUILD`;
+4. builds a commit diff with `PKGBUILD` first, followed by the other changed
+   files;
+5. sends that context to the selected AI provider; and
+6. returns the verdict and explanation with the source, diff, and commit it
+   reviewed.
 
-## `paru` integration
+The checker supports OpenAI, Anthropic, and OpenRouter through
+[Rig](https://github.com/0xPlaygrounds/rig), as well as the Claude Code and
+Codex CLIs. API-backed checks can use a restricted `read_file` tool to inspect
+other repository files when the diff needs more context. CLI-backed checks run
+in isolated sessions with read-only repository access.
 
-The experimental [`air-security` branch](https://github.com/Cretezy/paru/tree/air-security) checks every AUR commit since paru's accepted baseline against the hosted API. When any commit is missing remotely, it locally assesses the cumulative baseline-to-current diff using your configured provider and model. It runs after downloading AUR repositories and before executing pre-build commands or starting the build.
+#### Scoring
+
+Checks return one of three verdicts: **safe** for ordinary packaging behavior,
+**suspicious** when a concrete concern needs human review, or **dangerous**
+when there is strong evidence of malicious behavior.
+
+The prompt treats routine version and checksum bumps as normal while giving
+more scrutiny to changed sources, obfuscated commands, credential access,
+persistence, and privilege escalation.
+
+Verdicts are signals, not proof: models can be wrong, and downloaded binaries
+are not analyzed. Review the evidence before installing a package.
+
+### [CLI](cli/) and [web application](web/)
+
+`update-index` downloads current AUR metadata and appends newly seen package
+versions to SQLite. `check` selects current versions that have not already been
+reviewed with the chosen provider and model, then passes them through the
+checker concurrently.
+
+The [Topcoat](https://github.com/tokio-rs/topcoat) web application provides a
+searchable catalog of packages and checks. Each result includes its check
+history, full `PKGBUILD`, and highlighted update diff so the verdict can be
+reviewed instead of treated as a black box.
+
+## paru integration
+
+The experimental
+[`aur-security` branch](https://github.com/Cretezy/paru/tree/aur-security)
+brings these checks into the package installation workflow. It can use the
+hosted API, the local checker library, or both. In remote-only mode, paru looks
+up assessments for every commit since the last accepted version. In local-only
+mode, it uses the checker library to review the cumulative diff locally.
+
+With both enabled, paru checks the hosted API first. It only runs a local
+assessment when the remote results do not cover the complete update. The
+results are combined, and the package is safe only when the full update is
+covered and safe.
 
 These `paru.conf` options enable remote lookups with a local Codex fallback:
 
@@ -41,23 +114,19 @@ AurSecurityModel = gpt-5.6-luna
 # SkipAurSecurity
 ```
 
-`AurSecurityRemoteUrl` is optional and defaults to the hosted service. Omit `AurSecurityRemote` to use local assessment only. `AurSecurityProvider` accepts `openai`, `anthropic`, `openrouter`, `claude`, or `codex`; `AurSecurityModel` is the corresponding model identifier described in [AI providers](#ai-providers). API providers require their matching environment variable, while `claude` and `codex` require their corresponding installed and authenticated CLI.
+The remote URL is optional and defaults to the hosted service. To use remote
+assessments alone, omit `AurSecurityProvider` and `AurSecurityModel`. To run
+only local assessments, omit `AurSecurityRemote` and set both the provider and
+model. Supported providers are described in [AI providers](#ai-providers).
 
-One aggregate assessment is printed per package before the transaction table, whose verbose form includes a security-status column. A package is safe only when the whole range is covered and safe; dangerous outranks suspicious, which outranks unavailable coverage. Before review, `paru` asks whether safely assessed packages should be skipped; `SkipSafeReviews` makes skipping them the default answer and advances paru's accepted Git baseline. Suspicious, dangerous, unreviewed, and failed assessments remain in the normal review flow. With `--noconfirm`, a dangerous verdict aborts the transaction. `SkipAurSecurity` or `--skipaursecurity` disables the integration.
+`SkipSafeReviews` makes skipping manual review for safely assessed packages the
+default and remembers them as the baseline for the next update, while
+`SkipAurSecurity` disables both remote and local assessments.
+
+The checks run after paru downloads the AUR repositories and before it executes
+pre-build commands or starts the package build.
 
 ![paru displaying remote and local AUR security assessments before an upgrade](docs/paru-example.png)
-
-## Review philosophy
-
-Checks return one of three verdicts:
-
-- `safe` for ordinary packaging behavior
-- `suspicious` when a concrete concern needs human review
-- `dangerous` when there is strong evidence of malicious behavior
-
-The prompt accounts for provenance. A version and checksum bump from the same upstream source is usually normal; a changed domain, repository owner, or download mechanism warrants more scrutiny, as do obfuscated commands, credential access, persistence, and privilege escalation.
-
-This is a review aid, not proof that a package is safe. It does not analyze downloaded binaries and can produce false positives or miss malicious behavior. Inspect suspicious changes, repository history, and upstream provenance before installing an AUR package.
 
 ## Quick start
 

@@ -233,15 +233,12 @@ The configured D1 binding is `aur_security`. Run the CLI against the deployed
 Worker with:
 
 ```bash
-set -a
 source .env
-set +a
 
 cargo run -p aur_security -- update-index
 cargo run -p aur_security -- check --provider openai --model gpt-5.6-luna
 ```
 
-`web/build.sh` installs the released Topcoat and Workers build tools used by the
-[reference POC](https://github.com/Sillyvan/topcoat-workers-poc/blob/main/build.sh).
+`web/worker-build.sh` can be used to build the Worker.
 The CLI loads `.env` automatically when run from the repository, so the
 generated remote settings can be used directly with `cargo run`.
