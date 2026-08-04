@@ -1,4 +1,4 @@
-use aur_ai_security_db as db;
+use aur_security_db as db;
 use chrono::{DateTime, Utc};
 use topcoat::{view::view, Result};
 

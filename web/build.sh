@@ -18,7 +18,7 @@ cargo install -q topcoat-cli --locked
 
 topcoat asset bundle \
     --release \
-    --package aur_ai_security_web \
-    --bin aur_ai_security_web \
+    --package aur_security_web \
+    --bin aur_security_web \
     --out web/static/_topcoat/assets
 worker-build --release --panic-unwind web

@@ -2,7 +2,7 @@
 
 [AUR Security](https://github.com/Cretezy/aur-security) is an AI-assisted review pipeline for the [Arch User Repository](https://aur.archlinux.org/). It indexes package versions, examines AUR Git repositories for malware and supply-chain risk, and presents the evidence in a searchable web interface.
 
-[Read the article](https://cretezy.com/2026/aur-ai-security/) · [Try the live demo](https://aur-security.cretezy.com/)
+[Read the article](https://cretezy.com/2026/aur-security/) · [Try the live demo](https://aur-security.cretezy.com/)
 
 Every assessment preserves the exact Git commit, complete `PKGBUILD`, and commit diff so that its verdict can be reviewed rather than treated as a black box.
 
@@ -21,13 +21,13 @@ A familiar or orphaned package can receive a malicious update through the same w
 
 ## Demo
 
-[![AUR Security showing a suspicious package assessment and highlighted commit diff](docs/aur-ai-security-demo.png)](https://aur-security.cretezy.com/)
+[![AUR Security showing a suspicious package assessment and highlighted commit diff](docs/aur-security-demo.png)](https://aur-security.cretezy.com/)
 
 Click the screenshot to open the [live demo](https://aur-security.cretezy.com/).
 
 ## `paru` integration
 
-The experimental [`aur-ai-security` branch](https://github.com/Cretezy/paru/tree/aur-ai-security) checks every AUR commit since paru's accepted baseline against the hosted API. When any commit is missing remotely, it locally assesses the cumulative baseline-to-current diff using your configured provider and model. It runs after downloading AUR repositories and before executing pre-build commands or starting the build.
+The experimental [`air-security` branch](https://github.com/Cretezy/paru/tree/air-security) checks every AUR commit since paru's accepted baseline against the hosted API. When any commit is missing remotely, it locally assesses the cumulative baseline-to-current diff using your configured provider and model. It runs after downloading AUR repositories and before executing pre-build commands or starting the build.
 
 These `paru.conf` options enable remote lookups with a local Codex fallback:
 
@@ -66,13 +66,13 @@ You need Rust, Cargo, Git access to `aur.archlinux.org`, and either API credenti
 Download the current AUR index:
 
 ```bash
-cargo run -p aur_ai_security -- update-index
+cargo run -p aur_security -- update-index
 ```
 
 Preview packages modified during the last day without cloning repositories or calling a provider:
 
 ```bash
-cargo run -p aur_ai_security -- check --dry-run \
+cargo run -p aur_security -- check --dry-run \
   --provider openai \
   --model gpt-5.6-luna \
   --since 24h
@@ -83,7 +83,7 @@ Run checks with OpenAI:
 ```bash
 export OPENAI_API_KEY="your-api-key"
 
-cargo run -p aur_ai_security -- check \
+cargo run -p aur_security -- check \
   --provider openai \
   --model gpt-5.6-luna \
   --filter 010editor spotify
@@ -92,10 +92,10 @@ cargo run -p aur_ai_security -- check \
 The default database is `sqlite.db`. Override it with the global option:
 
 ```bash
-cargo run -p aur_ai_security -- --database data/aur-ai-security.sqlite update-index
+cargo run -p aur_security -- --database data/aur-security.sqlite update-index
 ```
 
-For release binaries, run `cargo build --release`. This produces `target/release/aur_ai_security` and `target/release/aur_ai_security_web`.
+For release binaries, run `cargo build --release`. This produces `target/release/aur_security` and `target/release/aur_security_web`.
 
 ## CLI
 
@@ -110,7 +110,7 @@ Stored metadata includes package and package-base identifiers, version, submitte
 `check` reviews current package versions that have not already been checked with the selected provider and model:
 
 ```bash
-cargo run -p aur_ai_security -- check --provider <PROVIDER> --model <MODEL> [OPTIONS]
+cargo run -p aur_security -- check --provider <PROVIDER> --model <MODEL> [OPTIONS]
 ```
 
 Supported providers are `openai`, `anthropic`, `openrouter`, `claude`, and `codex`. Useful filters include:
@@ -166,7 +166,7 @@ The [Topcoat](https://github.com/tokio-rs/topcoat) web application reads the sam
 
 ```bash
 cargo install topcoat-cli
-topcoat dev --package aur_ai_security_web
+topcoat dev --package aur_security_web
 ```
 
 It listens on `http://127.0.0.1:3000` by default. Use `HOST`, `PORT`, and `AUR_SECURITY_DATABASE` to customize the server. The interface provides package search, verdict filters, check history, complete PKGBUILDs, and highlighted diffs.
@@ -176,9 +176,9 @@ The JSON API includes `POST /api/v1/checks/lookup` for batch assessment lookup b
 For production, bundle the generated assets before starting the server:
 
 ```bash
-cargo build --release -p aur_ai_security_web
-topcoat asset bundle --release --package aur_ai_security_web
-./target/release/aur_ai_security_web --database sqlite.db
+cargo build --release -p aur_security_web
+topcoat asset bundle --release --package aur_security_web
+./target/release/aur_security_web --database sqlite.db
 ```
 
 ### Cloudflare Workers and D1
@@ -187,11 +187,11 @@ The `web` crate also builds the Worker target and serves the same UI from Cloudf
 
 ## Workspace
 
-- `checker` (`aur_ai_security_checker`): repository cloning, evidence collection, and AI assessment
-- `db` (`aur_ai_security_db`): SQLite connection, migrations, and queries
-- `cli` (`aur_ai_security`): indexing, candidate selection, and result persistence
-- `web` (`aur_ai_security_web`): native package browsing server and Cloudflare Worker/D1 target
-- `protocol` (`aur_ai_security_protocol`): shared wire types for local and remote database operations
+- `checker` (`aur_security_checker`): repository cloning, evidence collection, and AI assessment
+- `db` (`aur_security_db`): SQLite connection, migrations, and queries
+- `cli` (`aur_security`): indexing, candidate selection, and result persistence
+- `web` (`aur_security_web`): native package browsing server and Cloudflare Worker/D1 target
+- `protocol` (`aur_security_protocol`): shared wire types for local and remote database operations
 
 The CLI and web application share the database crate; the checker is independent of clap, SQLx, and the index database.
 
@@ -203,7 +203,7 @@ cargo clippy --workspace --locked --all-targets -- -D warnings
 cargo fmt --all
 ```
 
-Logging defaults to `INFO`. Use `RUST_LOG=debug` or a crate-specific filter such as `RUST_LOG=aur_ai_security_checker=debug,aur_ai_security=info`. SQLx remains at `INFO` and Rig at `WARN` under the broad debug filter; opt in with `sqlx=debug` or `rig_core=debug` when needed. Prompts and file contents are not logged.
+Logging defaults to `INFO`. Use `RUST_LOG=debug` or a crate-specific filter such as `RUST_LOG=aur_security_checker=debug,aur_security=info`. SQLx remains at `INFO` and Rig at `WARN` under the broad debug filter; opt in with `sqlx=debug` or `rig_core=debug` when needed. Prompts and file contents are not logged.
 
 ## License
 

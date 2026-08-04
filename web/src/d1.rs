@@ -2,11 +2,11 @@ use std::future::Future;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use aur_ai_security_db::{
+use aur_security_db::{
     CheckDetail, CheckLookupResult, CheckSummary, Database, LookupKey, PackageSearchResult,
     PAGE_SIZE,
 };
-use aur_ai_security_protocol as protocol;
+use aur_security_protocol as protocol;
 use serde::de::DeserializeOwned;
 use wasm_bindgen::JsValue;
 use worker::{

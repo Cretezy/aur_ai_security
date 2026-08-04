@@ -4,8 +4,8 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use aur_ai_security_db::Database;
-use aur_ai_security_protocol as protocol;
+use aur_security_db::Database;
+use aur_security_protocol as protocol;
 use flate2::read::GzDecoder;
 use serde::Deserialize;
 use tracing::{debug, info};

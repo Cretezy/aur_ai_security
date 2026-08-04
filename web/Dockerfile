@@ -12,7 +12,7 @@ COPY web ./web
 
 RUN topcoat asset bundle \
     --release \
-    --package aur_ai_security_web \
+    --package aur_security_web \
     --out /app/dist/assets
 
 
@@ -25,7 +25,7 @@ RUN groupadd --system app \
 
 WORKDIR /app
 
-COPY --from=builder --chown=app:app /app/target/release/aur_ai_security_web ./aur_ai_security_web
+COPY --from=builder --chown=app:app /app/target/release/aur_security_web ./aur_security_web
 COPY --from=builder --chown=app:app /app/dist/assets ./assets
 
 ENV HOST=0.0.0.0 \
@@ -37,4 +37,4 @@ EXPOSE 3000
 
 USER app
 
-ENTRYPOINT ["./aur_ai_security_web"]
+ENTRYPOINT ["./aur_security_web"]

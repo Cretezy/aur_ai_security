@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use aur_ai_security_db as db;
-use aur_ai_security_protocol as protocol;
+use aur_security_db as db;
+use aur_security_protocol as protocol;
 use topcoat::router::content::Json;
 use topcoat::{
     context::Cx,

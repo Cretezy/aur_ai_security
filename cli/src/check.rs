@@ -1,9 +1,9 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
-use aur_ai_security_checker::{check_package, Provider};
-use aur_ai_security_db::Database;
-use aur_ai_security_protocol as protocol;
+use aur_security_checker::{check_package, Provider};
+use aur_security_db::Database;
+use aur_security_protocol as protocol;
 use futures::{stream, StreamExt};
 use tracing::{debug, error, info};
 

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use aur_ai_security_db as db;
+use aur_security_db as db;
 use clap::Parser;
 use topcoat::{
     asset::{AssetBundle, RouterBuilderAssetExt},

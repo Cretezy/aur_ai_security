@@ -237,8 +237,8 @@ set -a
 source .env
 set +a
 
-cargo run -p aur_ai_security -- update-index
-cargo run -p aur_ai_security -- check --provider openai --model gpt-5.6-luna
+cargo run -p aur_security -- update-index
+cargo run -p aur_security -- check --provider openai --model gpt-5.6-luna
 ```
 
 `web/build.sh` installs the released Topcoat and Workers build tools used by the

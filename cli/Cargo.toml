@@ -1,5 +1,5 @@
 [package]
-name = "aur_ai_security"
+name = "aur_security"
 version.workspace = true
 edition.workspace = true
 repository.workspace = true
@@ -7,9 +7,9 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-aur_ai_security_checker = { path = "../checker" }
-aur_ai_security_db = { path = "../db" }
-aur_ai_security_protocol = { path = "../protocol" }
+aur_security_checker = { path = "../checker" }
+aur_security_db = { path = "../db" }
+aur_security_protocol = { path = "../protocol" }
 async-trait.workspace = true
 chrono.workspace = true
 clap.workspace = true

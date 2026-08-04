@@ -1,5 +1,5 @@
 [package]
-name = "aur_ai_security_checker"
+name = "aur_security_checker"
 version.workspace = true
 edition.workspace = true
 repository.workspace = true

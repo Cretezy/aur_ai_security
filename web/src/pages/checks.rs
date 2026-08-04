@@ -1,4 +1,4 @@
-use aur_ai_security_db as db;
+use aur_security_db as db;
 use pulldown_cmark::{html, CowStr, Event, Options, Parser, Tag};
 use topcoat::{
     context::Cx,

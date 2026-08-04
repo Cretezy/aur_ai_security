@@ -2,7 +2,7 @@ use std::{path::Path, str::FromStr};
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use aur_ai_security_protocol as protocol;
+use aur_security_protocol as protocol;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     QueryBuilder, Row, Sqlite, SqlitePool,

@@ -1,5 +1,5 @@
 [package]
-name = "aur_ai_security_protocol"
+name = "aur_security_protocol"
 version.workspace = true
 edition.workspace = true
 repository.workspace = true

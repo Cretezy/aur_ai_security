@@ -184,14 +184,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
-name = "aur_ai_security"
+name = "aur_security"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "aur_ai_security_checker",
- "aur_ai_security_db",
- "aur_ai_security_protocol",
+ "aur_security_checker",
+ "aur_security_db",
+ "aur_security_protocol",
  "chrono",
  "clap",
  "dotenvy",
@@ -208,7 +208,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "aur_ai_security_checker"
+name = "aur_security_checker"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -223,32 +223,32 @@ dependencies = [
 ]
 
 [[package]]
-name = "aur_ai_security_db"
+name = "aur_security_db"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "aur_ai_security_protocol",
+ "aur_security_protocol",
  "serde",
  "sqlx",
  "tracing",
 ]
 
 [[package]]
-name = "aur_ai_security_protocol"
+name = "aur_security_protocol"
 version = "0.1.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
-name = "aur_ai_security_web"
+name = "aur_security_web"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "aur_ai_security_db",
- "aur_ai_security_protocol",
+ "aur_security_db",
+ "aur_security_protocol",
  "chrono",
  "clap",
  "getrandom 0.2.15",

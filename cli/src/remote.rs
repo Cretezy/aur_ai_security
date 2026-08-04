@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
-use aur_ai_security_db as db;
-use aur_ai_security_protocol as protocol;
+use aur_security_db as db;
+use aur_security_protocol as protocol;
 use reqwest::{Client, RequestBuilder, Url};
 use serde::de::DeserializeOwned;
 use serde::Serialize;

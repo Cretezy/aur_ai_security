@@ -15,7 +15,7 @@ mod pages;
 mod ui;
 
 #[cfg(target_arch = "wasm32")]
-use aur_ai_security_db as db;
+use aur_security_db as db;
 #[cfg(target_arch = "wasm32")]
 use topcoat::{
     asset::{AssetConfig, Manifest, RouterBuilderAssetExt},

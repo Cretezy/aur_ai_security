@@ -19,7 +19,7 @@ enum ProviderArg {
     Codex,
 }
 
-impl From<ProviderArg> for aur_ai_security_checker::Provider {
+impl From<ProviderArg> for aur_security_checker::Provider {
     fn from(provider: ProviderArg) -> Self {
         match provider {
             ProviderArg::Openai => Self::Openai,
@@ -142,8 +142,8 @@ async fn main() -> Result<()> {
     }
 
     info!(database = %cli.database.display(), "starting AUR Security CLI");
-    let pool = aur_ai_security_db::connect(&cli.database, true).await?;
-    let database = aur_ai_security_db::SqliteBackend::new(pool);
+    let pool = aur_security_db::connect(&cli.database, true).await?;
+    let database = aur_security_db::SqliteBackend::new(pool);
     match cli.command {
         Command::UpdateIndex => aur::update_index(&database).await,
         Command::Check {
@@ -210,7 +210,7 @@ mod tests {
     #[test]
     fn parses_parallelism_override() {
         let cli = Cli::try_parse_from([
-            "aur_ai_security",
+            "aur_security",
             "check",
             "--provider",
             "openai",
@@ -230,7 +230,7 @@ mod tests {
     #[test]
     fn rejects_zero_parallelism() {
         let error = Cli::try_parse_from([
-            "aur_ai_security",
+            "aur_security",
             "check",
             "--provider",
             "openai",

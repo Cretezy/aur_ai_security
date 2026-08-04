@@ -1,5 +1,5 @@
-use aur_ai_security_db as db;
-use aur_ai_security_protocol as protocol;
+use aur_security_db as db;
+use aur_security_protocol as protocol;
 use topcoat::{
     context::Cx,
     router::{
