@@ -212,7 +212,9 @@ name = "aur_security_checker"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aur_security_protocol",
  "git2",
+ "reqwest 0.12.12",
  "rig-core",
  "schemars",
  "serde",

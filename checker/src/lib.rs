@@ -8,8 +8,14 @@ const MAX_FILE_DIFF_BYTES: usize = 256 * 1024;
 const MAX_COMMIT_DIFF_BYTES: usize = 1024 * 1024;
 
 pub mod ai;
+mod lookup;
 
 pub use ai::{AiProvider, Assessment, Provider, Verdict};
+pub use aur_security_protocol::{
+    Assessment as LookupAssessment, LookupCommitResult, LookupPackage, LookupRequest,
+    LookupResponse, LookupResult,
+};
+pub use lookup::lookup;
 
 #[derive(Debug)]
 pub struct PackageCheck {

@@ -9,7 +9,9 @@ The crate does not depend on the package index or database. It can clone an AUR
 package for a one-off check or review an existing repository, which also makes
 it suitable for integrations such as package managers.
 
-## What a check records
+## Local checking
+
+### What a check records
 
 Every successful check returns a [`PackageCheck`](src/lib.rs) containing:
 
@@ -23,7 +25,7 @@ default it compares `HEAD` with its first parent. Callers reviewing a range of
 updates can instead provide a baseline commit and receive the cumulative diff
 from that revision to `HEAD`.
 
-## Usage
+### Usage
 
 Use `check_package` to clone and review a package directly from the AUR:
 
@@ -65,25 +67,25 @@ use std::path::Path;
 
 use aur_security_checker::{check_repository, Provider};
 
-# async fn review() -> anyhow::Result<()> {
-let checked = check_repository(
-    Provider::Codex,
-    "gpt-5.6-luna",
-    "example-package",
-    Path::new("/path/to/aur-repository"),
-    Some("0123456789abcdef0123456789abcdef01234567"),
-)
-.await?;
+async fn review() -> anyhow::Result<()> {
+    let checked = check_repository(
+        Provider::Codex,
+        "gpt-5.6-luna",
+        "example-package",
+        Path::new("/path/to/aur-repository"),
+        Some("0123456789abcdef0123456789abcdef01234567"),
+    )
+    .await?;
 
-println!("reviewed {}", checked.commit_id);
-# Ok(())
-# }
+    println!("reviewed {}", checked.commit_id);
+    Ok(())
+}
 ```
 
 Pass `None` as the baseline to compare `HEAD` with its first parent. For an
 initial commit, the whole tree is treated as new.
 
-## Providers
+### Providers
 
 | Provider | `Provider` variant | Requirement |
 | --- | --- | --- |
@@ -105,7 +107,7 @@ The Claude provider runs a non-persistent safe-mode session with only `Read`,
 `Glob`, and `Grep`. The Codex provider runs an ephemeral session with user
 configuration ignored, shell tools disabled, and web search disabled.
 
-## Scoring
+### Scoring
 
 Assessments return one of three verdicts:
 
@@ -117,13 +119,46 @@ The explanation is required for suspicious and dangerous assessments. These
 verdicts are review signals, not proof that a package is safe, and the checker
 does not analyze downloaded binaries.
 
-## Limits
+### Limits
 
 The checker requires `PKGBUILD` at the repository root and requires it to be
 valid UTF-8. Individual file patches over 256 KiB are represented by an
 omission notice, the assembled commit diff is limited to 1 MiB, and the review
 prompt includes at most 256 KiB of that diff. The full assembled diff remains
 available in `PackageCheck` for storage and inspection.
+
+## Remote lookup
+
+The crate also exposes `lookup`, which fetches stored assessments from the
+lookup API. The lookup request and response types are shared with the workspace
+protocol crate and re-exported by the checker for callers that only depend on
+this crate.
+
+```rust,no_run
+use aur_security_checker::{lookup, LookupPackage, LookupRequest};
+
+async fn fetch() -> anyhow::Result<()> {
+    let response = lookup(
+        "https://aur-security.cretezy.com",
+        &LookupRequest {
+            packages: vec![LookupPackage {
+                package_base: "example-package".to_owned(),
+                commits: vec!["0123456789abcdef0123456789abcdef01234567".to_owned()],
+            }],
+        },
+    )
+    .await?;
+
+    for package in response.results {
+        println!("{}: {} commits", package.package_base, package.commits.len());
+    }
+    Ok(())
+}
+```
+
+Requests larger than the API's 1,000-commit limit are batched automatically.
+The response preserves package and commit order, and an unmatched commit has
+an `assessment` of `None`.
 
 ## Development
 
